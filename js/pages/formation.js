@@ -444,6 +444,14 @@ function renderResultsSection() {
         </div>
       </div>
 
+      <!-- Giải thích khi chỉ có 2 đội -->
+      ${teams.length === 2 ? `
+        <div class="bg-blue-900/20 border border-blue-800/50 rounded-xl px-4 py-2 mb-3 text-xs text-blue-300 flex items-start gap-2">
+          <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
+          <span>Có <strong>2 đội</strong> → mỗi lượt chỉ có <strong>1 trận</strong> (Đội Đỏ vs Đội Xanh). Muốn nhiều trận khác nhau → cần ≥ 3 đội.</span>
+        </div>
+      ` : ''}
+
       ${!hasResults
         ? `<div class="card text-center py-8">
             <div class="text-4xl mb-3">📅</div>
@@ -534,29 +542,41 @@ function renderResultRow(result, teamMap) {
 }
 
 function confirmGenerateSchedule(numRounds) {
-  const hasCompleted = formationState.results.some(r => r.status === 'completed');
-  if (hasCompleted) {
+  const hasAny = formationState.results.length > 0;
+  if (hasAny) {
+    const completedCount = formationState.results.filter(r => r.status === 'completed').length;
     openModal(`
       <div class="p-6 text-center">
         <div class="text-4xl mb-4">⚠️</div>
-        <h3 class="text-white font-semibold text-lg mb-2">Tạo lại lịch?</h3>
-        <p class="text-gray-400 mb-1">Đã có kết quả đã hoàn thành.</p>
-        <p class="text-gray-400 mb-5 text-sm">Lịch cũ chưa hoàn thành sẽ bị xóa. Tiếp tục?</p>
-        <div class="flex gap-3 justify-center">
-          <button onclick="closeModal()" class="btn btn-secondary">Hủy</button>
-          <button onclick="closeModal(); generateRoundRobin(${numRounds})" class="btn btn-primary">Tạo ${numRounds} lượt</button>
+        <h3 class="text-white font-semibold text-lg mb-2">Tạo lịch ${numRounds} lượt?</h3>
+        <p class="text-gray-400 mb-1 text-sm">Hiện có <strong class="text-white">${formationState.results.length} trận</strong> trong lịch
+          ${completedCount > 0 ? `(${completedCount} đã xong)` : ''}.
+        </p>
+        <p class="text-gray-400 mb-5 text-sm">Chọn cách xử lý lịch cũ:</p>
+        <div class="flex flex-col gap-2">
+          <button onclick="closeModal(); generateRoundRobin(${numRounds}, false)" class="btn btn-secondary w-full justify-center">
+            <i class="fas fa-plus mr-2"></i> Giữ lịch cũ, thêm lượt mới
+          </button>
+          <button onclick="closeModal(); generateRoundRobin(${numRounds}, true)" class="btn btn-danger w-full justify-center">
+            <i class="fas fa-trash mr-2"></i> Xóa tất cả & tạo lại từ đầu
+          </button>
+          <button onclick="closeModal()" class="btn btn-secondary w-full justify-center text-gray-400">Hủy</button>
         </div>
       </div>
     `);
   } else {
-    generateRoundRobin(numRounds);
+    generateRoundRobin(numRounds, false);
   }
 }
 
-async function generateRoundRobin(numRounds = 1) {
+async function generateRoundRobin(numRounds = 1, resetAll = false) {
   showLoading(true);
   try {
-    const res = await API.call('generateSchedule', { match_id: formationState.matchId, num_rounds: numRounds });
+    const res = await API.call('generateSchedule', {
+      match_id: formationState.matchId,
+      num_rounds: numRounds,
+      reset_all: resetAll
+    });
     if (res.success) {
       showToast(`Đã tạo ${res.schedule.length} trận (${numRounds} lượt)`, 'success');
       refreshResultsSection();

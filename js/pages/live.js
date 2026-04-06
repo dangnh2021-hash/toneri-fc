@@ -6,6 +6,7 @@ let liveState = {
   matchId: null,
   match: null,
   teams: [],
+  guestTeams: [],
   results: [],
   localScores: {}   // resultId -> { home, away, events: [{time, side, name}] }
 };
@@ -27,7 +28,10 @@ async function renderLiveMatch(container, params = {}) {
       API.getResults(matchId)
     ]);
 
-    if (detailRes.success) liveState.match = detailRes.match;
+    if (detailRes.success) {
+      liveState.match = detailRes.match;
+      liveState.guestTeams = detailRes.guestTeams || [];
+    }
     if (teamsRes.success) liveState.teams = teamsRes.teams || [];
     if (resultsRes.success) liveState.results = resultsRes.results || [];
 
@@ -52,20 +56,30 @@ async function renderLiveMatch(container, params = {}) {
 }
 
 function renderLiveUI(container) {
-  const { match, teams, results } = liveState;
+  const { match, teams, guestTeams, results } = liveState;
+
+  // Build teamMap từ cả internal teams và guest teams
   const teamMap = {};
   teams.forEach(t => { teamMap[t.team_id] = t; });
 
-  // Nhóm theo lượt
+  // Nhóm theo lượt — lọc bỏ result có team_id không hợp lệ
+  const validResults = results.filter(r =>
+    teamMap[r.team_home_id] || teamMap[r.team_away_id]
+  );
+  const staleResults = results.filter(r =>
+    !teamMap[r.team_home_id] && !teamMap[r.team_away_id]
+  );
+
   const legs = {};
-  results.forEach(r => {
+  validResults.forEach(r => {
     const leg = r.round_number || 1;
     if (!legs[leg]) legs[leg] = [];
     legs[leg].push(r);
   });
   const legKeys = Object.keys(legs).map(Number).sort((a, b) => a - b);
 
-  const pendingCount = results.filter(r => r.status !== 'completed').length;
+  const pendingCount = validResults.filter(r => r.status !== 'completed').length;
+  const totalTeams = teams.length;
 
   container.innerHTML = `
     <div class="live-page space-y-4">
@@ -86,37 +100,61 @@ function renderLiveUI(container) {
           <button onclick="reloadLiveData()" class="btn btn-secondary btn-sm">
             <i class="fas fa-sync"></i> Tải lại
           </button>
-          ${pendingCount === 0 && results.length > 0 ? `
+          ${pendingCount === 0 && validResults.length > 0 ? `
             <span class="badge badge-completed text-sm px-3 py-1">✅ Tất cả đã xong</span>
           ` : ''}
         </div>
       </div>
 
-      <!-- No results yet -->
-      ${results.length === 0 ? `
+      <!-- Đội khách mời (informational) -->
+      ${guestTeams.length > 0 ? `
+        <div class="bg-gray-800 border border-amber-700/40 rounded-xl p-3 flex items-start gap-2">
+          <i class="fas fa-shield-alt text-amber-400 mt-0.5 text-sm"></i>
+          <div>
+            <span class="text-amber-400 text-xs font-semibold">Đội khách mời tham dự:</span>
+            <span class="text-gray-300 text-xs ml-2">${guestTeams.map(g => g.team_name).join(', ')}</span>
+            <p class="text-gray-500 text-xs mt-0.5">Đội khách cần được thêm vào đội hình để xuất hiện trong lịch đấu.</p>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Cảnh báo data cũ bị lỗi -->
+      ${staleResults.length > 0 ? `
+        <div class="bg-red-900/20 border border-red-700/40 rounded-xl p-3 flex items-start gap-2">
+          <i class="fas fa-exclamation-triangle text-red-400 mt-0.5 text-sm"></i>
+          <div class="text-xs">
+            <span class="text-red-400 font-semibold">${staleResults.length} trận từ lịch cũ không còn hợp lệ.</span>
+            <span class="text-gray-400 ml-1">Vào Đội hình → "Reset & tạo lịch mới" để dọn dẹp.</span>
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- No valid results yet -->
+      ${validResults.length === 0 ? `
         <div class="card text-center py-10">
           <div class="text-5xl mb-3">📋</div>
-          <p class="text-white font-semibold">Chưa có lịch thi đấu</p>
+          <p class="text-white font-semibold">Chưa có lịch thi đấu hợp lệ</p>
           <p class="text-gray-400 text-sm mt-1">Vào trang Đội hình → tạo lịch vòng tròn trước</p>
           <button onclick="navigateTo('formation', {match_id: '${liveState.matchId}'})"
             class="btn btn-secondary mt-4">Về trang đội hình</button>
         </div>
-      ` : legKeys.map(leg => `
-        <div>
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span class="text-amber-400 font-bold">
-              ${leg === 1 ? 'Lượt đi' : leg === 2 ? 'Lượt về' : `Lượt ${leg}`}
-            </span>
-            <span class="text-gray-500 text-xs">
-              (${legs[leg].filter(r => liveState.localScores[r.result_id]?.saved || r.status === 'completed').length}/${legs[leg].length} xong)
-            </span>
-          </div>
-          <div class="space-y-3">
-            ${legs[leg].map(r => renderLiveResultCard(r, teamMap)).join('')}
-          </div>
-        </div>
-      `).join('')}
+      ` : legKeys.map(leg => {
+          const legMatches = legs[leg];
+          const doneCount = legMatches.filter(r => liveState.localScores[r.result_id]?.saved || r.status === 'completed').length;
+          const legLabel = leg === 1 ? 'Lượt đi' : leg === 2 ? 'Lượt về' : `Lượt ${leg}`;
+          return `
+            <div>
+              <div class="flex items-center gap-2 mb-3">
+                <div class="w-2 h-2 rounded-full bg-amber-400"></div>
+                <span class="text-amber-400 font-bold">${legLabel}</span>
+                <span class="text-gray-500 text-xs">(${doneCount}/${legMatches.length} xong)</span>
+              </div>
+              <div class="space-y-3">
+                ${legMatches.map(r => renderLiveResultCard(r, teamMap)).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
 
       <!-- Ghi chú -->
       <div class="bg-gray-800 border border-gray-700 rounded-xl p-3 text-xs text-gray-400 flex items-start gap-2">

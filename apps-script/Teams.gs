@@ -405,7 +405,7 @@ function getResults(data) {
 
 function generateRoundRobinSchedule(data) {
   const admin = requireAdmin(data);
-  const { match_id, num_rounds } = data;
+  const { match_id, num_rounds, reset_all } = data;
   const numRounds = Math.max(1, Math.min(5, Number(num_rounds) || 1));
 
   const teams = getSheetData('MATCH_TEAMS').filter(t => t.match_id === match_id);
@@ -413,10 +413,10 @@ function generateRoundRobinSchedule(data) {
 
   const sheet = getSheet('MATCH_RESULTS');
 
-  // Xóa kết quả cũ chưa hoàn thành
+  // Xóa kết quả cũ: nếu reset_all=true thì xóa hết, ngược lại chỉ xóa pending/live
   const existing = getSheetData('MATCH_RESULTS').filter(r => r.match_id === match_id);
   existing.forEach(r => {
-    if (r.status === 'pending' || r.status === 'live') {
+    if (reset_all || r.status === 'pending' || r.status === 'live') {
       const row = findRowByValue('MATCH_RESULTS', 0, r.result_id);
       if (row) sheet.deleteRow(row.rowNum);
     }
