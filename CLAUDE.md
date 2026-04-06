@@ -42,7 +42,8 @@ App quản lý đội bóng phủi cuối tuần của nhóm bạn. Dùng thực
     ├── Teams.gs            # suggestTeams, saveTeams, saveMatchResult, generateRoundRobinSchedule
     ├── Ratings.gs          # ELO calculation, leaderboard
     ├── Utils.gs            # getSheet, getSheetData, generateId, nowISO, success/error helpers
-    └── Setup.gs            # Khởi tạo sheet structure + admin user
+    ├── Setup.gs            # Khởi tạo sheet structure + admin user
+    └── TestData.gs         # Tạo dữ liệu test (không dùng trong production)
 ```
 
 ---

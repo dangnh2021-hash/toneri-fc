@@ -60,6 +60,7 @@ function doPost(e) {
       case 'generateSchedule': result = generateRoundRobinSchedule(data); break;
       case 'addMatchResult':  result = addMatchResult(data); break;
       case 'deleteMatchResults': result = deleteMatchResults(data); break;
+      case 'deleteMatchResult': result = deleteMatchResult(data); break;
 
       // ---- Ratings ----
       case 'getLeaderboard':  result = getLeaderboard(data); break;

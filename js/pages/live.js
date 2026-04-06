@@ -471,15 +471,15 @@ function openAddMatchModal() {
       <h3 class="text-white font-bold text-lg"><i class="fas fa-plus-circle text-green-400 mr-2"></i>Thêm trận đấu</h3>
       <div>
         <label class="text-gray-400 text-sm block mb-1">Đội nhà</label>
-        <select id="add-match-home" class="input-field w-full">${teamOptions}</select>
+        <select id="add-match-home" class="form-select">${teamOptions}</select>
       </div>
       <div>
         <label class="text-gray-400 text-sm block mb-1">Đội khách</label>
-        <select id="add-match-away" class="input-field w-full">${teamOptions}</select>
+        <select id="add-match-away" class="form-select">${teamOptions}</select>
       </div>
       <div>
         <label class="text-gray-400 text-sm block mb-1">Lượt</label>
-        <select id="add-match-leg" class="input-field w-full">${legOptions}</select>
+        <select id="add-match-leg" class="form-select">${legOptions}</select>
       </div>
       <div class="flex gap-3 justify-end pt-2">
         <button onclick="closeModal()" class="btn btn-secondary">Hủy</button>

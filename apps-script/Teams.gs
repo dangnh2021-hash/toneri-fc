@@ -496,3 +496,22 @@ function deleteMatchResults(data) {
   }
   return success({ message: `Đã xóa ${deletedCount} kết quả`, deleted: deletedCount });
 }
+
+function deleteMatchResult(data) {
+  requireAdmin(data);
+  const { result_id } = data;
+  if (!result_id) return error('Thiếu result_id');
+
+  const sheet = getSheet('MATCH_RESULTS');
+  const allData = sheet.getDataRange().getValues();
+  const headers = allData[0];
+  const resultIdCol = headers.indexOf('result_id');
+
+  for (let i = allData.length - 1; i >= 1; i--) {
+    if (String(allData[i][resultIdCol]) === String(result_id)) {
+      sheet.deleteRow(i + 1);
+      return success({ deleted: 1 });
+    }
+  }
+  return error('Không tìm thấy kết quả');
+}

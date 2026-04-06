@@ -153,6 +153,10 @@ const API = {
     return this.call('deleteMatchResults', { match_id: matchId, status_filter: statusFilter });
   },
 
+  async deleteMatchResult(resultId) {
+    return this.call('deleteMatchResult', { result_id: resultId });
+  },
+
   // ---- Ratings ----
   async getLeaderboard() {
     return this.call('getLeaderboard');

@@ -452,13 +452,12 @@ function renderResultsSection() {
   const teamMap = {};
   teams.forEach(t => { teamMap[t.team_id] = t; });
 
-  // Chỉ hiển thị trận đã xong
   const completedResults = results.filter(r => r.status === 'completed');
   const pendingCount = results.filter(r => r.status !== 'completed').length;
 
-  // Nhóm completed theo lượt
+  // Nhóm tất cả kết quả theo lượt (gồm cả pending)
   const legs = {};
-  completedResults.forEach(r => {
+  results.forEach(r => {
     const leg = r.round_number || 1;
     if (!legs[leg]) legs[leg] = [];
     legs[leg].push(r);
@@ -473,11 +472,6 @@ function renderResultsSection() {
         </h2>
         ${isAdmin ? `
           <div class="flex items-center gap-2 flex-wrap">
-            ${pendingCount > 0 ? `
-              <button onclick="resetPendingResults()" class="btn btn-danger btn-sm">
-                <i class="fas fa-trash mr-1"></i> Xóa ${pendingCount} trận chưa đấu
-              </button>
-            ` : ''}
             <span class="text-gray-400 text-xs">Tạo lịch:</span>
             <button onclick="confirmGenerateSchedule(1)" class="btn btn-secondary btn-sm">1 lượt</button>
             <button onclick="confirmGenerateSchedule(2)" class="btn btn-secondary btn-sm">2 lượt</button>
@@ -494,11 +488,11 @@ function renderResultsSection() {
         </div>
       ` : ''}
 
-      ${completedResults.length === 0
+      ${results.length === 0
         ? `<div class="card text-center py-8">
-            <div class="text-4xl mb-3">${results.length > 0 ? '⏳' : '📅'}</div>
-            <p class="text-white font-semibold">${results.length > 0 ? 'Chưa có trận nào kết thúc' : 'Chưa có lịch thi đấu'}</p>
-            <p class="text-gray-400 text-sm mt-1">${results.length > 0 ? 'Bắt đầu thi đấu trong trang Live' : (isAdmin ? 'Nhấn "1 lượt" ... để tạo vòng tròn' : '')}</p>
+            <div class="text-4xl mb-3">📅</div>
+            <p class="text-white font-semibold">Chưa có lịch thi đấu</p>
+            <p class="text-gray-400 text-sm mt-1">${isAdmin ? 'Nhấn "1 lượt" ... để tạo vòng tròn' : ''}</p>
           </div>`
         : legKeys.map(leg => `
             <div class="mb-4">
@@ -506,7 +500,7 @@ function renderResultsSection() {
                 <span class="text-amber-400 font-semibold text-sm">
                   ${leg === 1 ? '🏃 Lượt đi' : leg === 2 ? '🔄 Lượt về' : `🔁 Lượt ${leg}`}
                 </span>
-                <span class="text-gray-500 text-xs">(${legs[leg].length} trận)</span>
+                <span class="text-gray-500 text-xs">(${legs[leg].filter(r => r.status === 'completed').length}/${legs[leg].length} xong)</span>
               </div>
               <div class="space-y-2">
                 ${legs[leg].map(r => renderResultRow(r, teamMap, isAdmin)).join('')}
@@ -568,31 +562,52 @@ async function resetPendingResults() {
 function renderResultRow(result, teamMap, isAdmin = false) {
   const home = teamMap[result.team_home_id] || {};
   const away = teamMap[result.team_away_id] || {};
+  const isPending = result.status !== 'completed';
 
   return `
-    <div class="card py-3 px-4">
+    <div class="card py-3 px-4 ${isPending ? 'opacity-60' : ''}">
       <div class="flex items-center gap-2">
         <div class="flex-1 text-right">
           <span class="font-semibold text-sm" style="color:${home.team_color || '#fff'}">${home.team_name || 'Đội 1'}</span>
         </div>
         <div class="text-white font-bold text-xl mx-3 min-w-[70px] text-center">
-          ${result.score_home} - ${result.score_away}
+          ${isPending ? '<span class="text-gray-500 text-sm font-normal">vs</span>' : `${result.score_home} - ${result.score_away}`}
         </div>
         <div class="flex-1">
           <span class="font-semibold text-sm" style="color:${away.team_color || '#fff'}">${away.team_name || 'Đội 2'}</span>
         </div>
         ${isAdmin
-          ? `<button onclick="resetResult('${result.result_id}')" class="btn btn-secondary btn-sm flex-shrink-0" title="Reset về chưa đấu">
-              <i class="fas fa-undo text-xs"></i>
-            </button>`
-          : `<span class="badge badge-completed text-xs">✅</span>`
+          ? isPending
+            ? `<button onclick="deleteOneResult('${result.result_id}')" class="btn btn-danger btn-sm flex-shrink-0" title="Xóa trận này">
+                <i class="fas fa-trash text-xs"></i>
+              </button>`
+            : `<button onclick="resetResult('${result.result_id}')" class="btn btn-secondary btn-sm flex-shrink-0" title="Reset về chưa đấu">
+                <i class="fas fa-undo text-xs"></i>
+              </button>`
+          : isPending
+            ? `<span class="text-gray-500 text-xs">⏳</span>`
+            : `<span class="badge badge-completed text-xs">✅</span>`
         }
       </div>
-      ${result.scorers_summary ? `
+      ${result.scorers_summary && !isPending ? `
         <div class="mt-2 pt-2 border-t border-gray-700 text-gray-500 text-xs">${result.scorers_summary}</div>
       ` : ''}
     </div>
   `;
+}
+
+async function deleteOneResult(resultId) {
+  showLoading(true);
+  try {
+    const res = await API.deleteMatchResult(resultId);
+    if (res.success) {
+      formationState.results = formationState.results.filter(r => r.result_id !== resultId);
+      showToast('Đã xóa trận đấu', 'success');
+      const section = document.getElementById('results-section');
+      if (section) section.innerHTML = renderResultsSection();
+    } else { showToast(res.error, 'error'); }
+  } catch (e) { showToast('Lỗi', 'error'); }
+  finally { showLoading(false); }
 }
 
 function confirmGenerateSchedule(numRounds) {
