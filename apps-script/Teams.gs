@@ -205,24 +205,30 @@ function saveTeams(data) {
 }
 
 function deleteTeamsOfMatch(match_id) {
-  // Xóa MATCH_TEAMS
+  // Xóa MATCH_TEAMS — chỉ xóa internal teams, giữ lại guest teams
   const teamsSheet = getSheet('MATCH_TEAMS');
   const teamsData = teamsSheet.getDataRange().getValues();
-  const tMatchCol = teamsData[0].indexOf('match_id');
+  const headers = teamsData[0];
+  const tMatchCol = headers.indexOf('match_id');
+  const tTypeCol = headers.indexOf('team_type');
 
+  const deletedTeamIds = [];
   for (let i = teamsData.length - 1; i >= 1; i--) {
-    if (teamsData[i][tMatchCol] === match_id) {
+    if (teamsData[i][tMatchCol] === match_id && teamsData[i][tTypeCol] !== 'guest') {
+      deletedTeamIds.push(teamsData[i][0]);
       teamsSheet.deleteRow(i + 1);
     }
   }
 
-  // Xóa TEAM_PLAYERS
+  // Xóa TEAM_PLAYERS chỉ cho các internal team đã xóa
   const playersSheet = getSheet('TEAM_PLAYERS');
   const playersData = playersSheet.getDataRange().getValues();
   const pMatchCol = playersData[0].indexOf('match_id');
+  const pTeamCol = playersData[0].indexOf('team_id');
 
   for (let i = playersData.length - 1; i >= 1; i--) {
-    if (playersData[i][pMatchCol] === match_id) {
+    if (playersData[i][pMatchCol] === match_id &&
+        deletedTeamIds.includes(String(playersData[i][pTeamCol]))) {
       playersSheet.deleteRow(i + 1);
     }
   }

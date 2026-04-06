@@ -102,9 +102,23 @@ function getMatchDetail(data) {
   const matchObj = {};
   row.headers.forEach((h, i) => { matchObj[h] = row.data[i]; });
 
-  // Lấy thêm attendance
-  const attendance = getSheetData('MATCH_ATTENDANCE')
+  // Lấy thêm attendance + enrich với thông tin user
+  const rawAttendance = getSheetData('MATCH_ATTENDANCE')
     .filter(a => a.match_id === match_id);
+
+  const users = getSheetData('USERS');
+  const userMap = {};
+  users.forEach(u => { userMap[u.user_id] = u; });
+
+  const attendance = rawAttendance.map(a => {
+    const u = userMap[a.user_id] || {};
+    return {
+      ...a,
+      full_name: u.full_name || 'Unknown',
+      positions: u.positions || '',
+      overall_rating: u.overall_rating || 0
+    };
+  });
 
   // Lấy thêm teams
   const teams = getSheetData('MATCH_TEAMS')
@@ -216,7 +230,20 @@ function addGuestTeam(data) {
     guestId, team_name, representative_name || '', contact_phone || '',
     match_id || '', notes || '', nowISO()
   ]);
-  return success({ guest_team_id: guestId, message: 'Đã thêm đội khách mời' });
+
+  // Tự động thêm vào MATCH_TEAMS để xuất hiện trong formation + live + vòng tròn
+  let teamId = null;
+  if (match_id) {
+    teamId = generateId('TMT');
+    const existingTeams = getSheetData('MATCH_TEAMS').filter(t => t.match_id === match_id);
+    const GUEST_COLORS = ['#8B5CF6', '#EC4899', '#10B981', '#F97316', '#06B6D4'];
+    const color = GUEST_COLORS[existingTeams.length % GUEST_COLORS.length];
+    getSheet('MATCH_TEAMS').appendRow([
+      teamId, match_id, team_name, color, 'guest', guestId, '', 0, 0, 0, 0, nowISO()
+    ]);
+  }
+
+  return success({ guest_team_id: guestId, team_id: teamId, message: 'Đã thêm đội khách mời' });
 }
 
 function getGuestTeams(data) {
@@ -232,6 +259,16 @@ function deleteGuestTeam(data) {
   const { guest_team_id } = data;
   const row = findRowByValue('GUEST_TEAMS', 0, guest_team_id);
   if (!row) return error('Không tìm thấy đội khách');
+
+  // Xóa MATCH_TEAMS entry tương ứng
+  const matchTeams = getSheetData('MATCH_TEAMS');
+  matchTeams.forEach(t => {
+    if (String(t.guest_team_id) === String(guest_team_id)) {
+      const tRow = findRowByValue('MATCH_TEAMS', 0, t.team_id);
+      if (tRow) getSheet('MATCH_TEAMS').deleteRow(tRow.rowNum);
+    }
+  });
+
   getSheet('GUEST_TEAMS').deleteRow(row.rowNum);
   return success({ message: 'Đã xóa đội khách' });
 }
