@@ -67,6 +67,32 @@ async function renderAdmin(container) {
         </div>
       </div>
 
+      <!-- Admin users -->
+      ${adminUsers.length > 0 ? `
+        <div>
+          <h2 class="section-heading"><i class="fas fa-shield-alt text-amber-400"></i> Tài khoản Admin (${adminUsers.length})</h2>
+          <div class="space-y-2">
+            ${adminUsers.map(u => `
+              <div class="card py-3 px-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full bg-amber-800 flex items-center justify-center text-sm font-bold text-white">
+                    ${(u.full_name || '?')[0]}
+                  </div>
+                  <div>
+                    <span class="text-white font-semibold">${u.full_name}</span>
+                    <span class="text-gray-400 text-sm ml-2">@${u.username}</span>
+                    <span class="badge badge-yes text-xs ml-1">Admin</span>
+                  </div>
+                </div>
+                <button onclick="confirmRevokeAdmin('${u.user_id}', '${u.full_name}')" class="btn btn-danger btn-sm">
+                  <i class="fas fa-shield-alt mr-1"></i> Thu hồi
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
       <!-- Inactive users -->
       ${users.filter(u => !u.is_admin && u.status === 'inactive').length > 0 ? `
         <div>
@@ -155,6 +181,10 @@ function renderAdminUserCard(u) {
         <button onclick="openAwardMVPModal('${u.user_id}', '${u.full_name}')"
           class="btn btn-secondary btn-sm">
           🏅 MVP
+        </button>
+        <button onclick="openGrantAdminModal('${u.user_id}', '${u.full_name}')"
+          class="btn btn-secondary btn-sm">
+          <i class="fas fa-shield-alt mr-1"></i> Admin
         </button>
         <button onclick="toggleUserStatus('${u.user_id}', 'inactive')"
           class="btn btn-danger btn-sm">
@@ -380,6 +410,65 @@ async function submitToggleStatus(userId, status) {
     const res = await API.adminUpdateUser(userId, { status });
     if (res.success) {
       showToast(`Đã ${status === 'inactive' ? 'khóa' : 'kích hoạt'} tài khoản`, 'success');
+      renderAdmin(document.getElementById('page-content'));
+    } else { showToast(res.error, 'error'); }
+  } catch (e) { showToast('Lỗi', 'error'); }
+  finally { showLoading(false); }
+}
+
+// ---- Grant / Revoke Admin ----
+
+function openGrantAdminModal(userId, name) {
+  openModal(`
+    <div class="p-6 text-center">
+      <div class="text-5xl mb-3">🛡️</div>
+      <h3 class="text-white font-bold text-lg mb-2">Trao quyền Admin</h3>
+      <p class="text-gray-400 mb-1">Người dùng: <span class="text-white font-semibold">${name}</span></p>
+      <p class="text-amber-400 text-sm mb-5">Admin có thể tạo trận, xếp đội, chỉnh chỉ số tất cả cầu thủ.</p>
+      <div class="flex gap-3 justify-center">
+        <button onclick="closeModal()" class="btn btn-secondary">Hủy</button>
+        <button onclick="submitGrantAdmin('${userId}', '${name}')" class="btn btn-primary">
+          <i class="fas fa-shield-alt mr-1"></i> Trao quyền Admin
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitGrantAdmin(userId, name) {
+  closeModal();
+  showLoading(true);
+  try {
+    const res = await API.adminUpdateUser(userId, { is_admin: true });
+    if (res.success) {
+      showToast(`Đã trao quyền Admin cho ${name}`, 'success');
+      renderAdmin(document.getElementById('page-content'));
+    } else { showToast(res.error, 'error'); }
+  } catch (e) { showToast('Lỗi', 'error'); }
+  finally { showLoading(false); }
+}
+
+function confirmRevokeAdmin(userId, name) {
+  openModal(`
+    <div class="p-6 text-center">
+      <div class="text-5xl mb-3">⚠️</div>
+      <h3 class="text-white font-bold text-lg mb-2">Thu hồi quyền Admin</h3>
+      <p class="text-gray-400 mb-5">Thu hồi quyền Admin của <span class="text-white font-semibold">${name}</span>?</p>
+      <div class="flex gap-3 justify-center">
+        <button onclick="closeModal()" class="btn btn-secondary">Hủy</button>
+        <button onclick="submitRevokeAdmin('${userId}', '${name}')" class="btn btn-danger">Thu hồi</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitRevokeAdmin(userId, name) {
+  closeModal();
+  showLoading(true);
+  try {
+    const res = await API.adminUpdateUser(userId, { is_admin: false });
+    if (res.success) {
+      showToast(`Đã thu hồi quyền Admin của ${name}`, 'success');
       renderAdmin(document.getElementById('page-content'));
     } else { showToast(res.error, 'error'); }
   } catch (e) { showToast('Lỗi', 'error'); }

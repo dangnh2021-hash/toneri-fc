@@ -22,6 +22,10 @@ async function renderFormation(container, params = {}) {
 
   formationState.matchId = matchId;
   formationState.isAdmin = getStoredUser().is_admin;
+  formationState.teams = [];
+  formationState.attendance = [];
+  formationState.results = [];
+  formationState.guestTeams = [];
 
   showLoading(true);
   try {
@@ -75,19 +79,19 @@ function renderFormationUI(container) {
             <h1 class="text-2xl font-bold text-white">⚽ Đội hình thi đấu</h1>
             <p class="text-gray-400 text-sm mt-0.5">${match?.venue_name || ''} · ${formatDate(match?.match_date)} · ${formatTime(match?.start_time)}</p>
           </div>
-          <div class="flex gap-2 flex-wrap">
+          <div class="flex gap-2 flex-wrap" id="formation-header-btns">
             ${isAdmin && yesPlayers.length > 0 ? `
               <button onclick="runSuggestTeams()" class="btn btn-gold">
                 <i class="fas fa-magic"></i> Auto xếp đội
               </button>
             ` : ''}
             ${isAdmin && hasTeams ? `
-              <button onclick="saveCurrentTeams()" class="btn btn-primary">
+              <button onclick="saveCurrentTeams()" class="btn btn-primary" id="btn-save-teams">
                 <i class="fas fa-save"></i> Lưu đội hình
               </button>
             ` : ''}
             ${hasTeams ? `
-              <button onclick="openLiveMatch()" class="btn btn-live">
+              <button onclick="openLiveMatch()" class="btn btn-live" id="btn-live-match">
                 <i class="fas fa-circle" style="color:#ef4444;animation:pulse 1.5s infinite"></i> Live thi đấu
               </button>
             ` : ''}
@@ -396,6 +400,21 @@ async function runSuggestTeams() {
 
       document.getElementById('teams-container').innerHTML = renderTeamsGrid(formationState.teams);
       initSortable();
+
+      // Show Lưu đội hình + Live buttons if not already present
+      if (!document.getElementById('btn-save-teams')) {
+        const btnsDiv = document.getElementById('formation-header-btns');
+        if (btnsDiv) {
+          btnsDiv.insertAdjacentHTML('beforeend', `
+            <button onclick="saveCurrentTeams()" class="btn btn-primary" id="btn-save-teams">
+              <i class="fas fa-save"></i> Lưu đội hình
+            </button>
+            <button onclick="openLiveMatch()" class="btn btn-live" id="btn-live-match">
+              <i class="fas fa-circle" style="color:#ef4444;animation:pulse 1.5s infinite"></i> Live thi đấu
+            </button>
+          `);
+        }
+      }
 
       const diff = res.balanceScore !== null ? `(chênh lệch: ${res.balanceScore} điểm)` : '';
       showToast(`Đã xếp ${formationState.teams.length} đội ${diff}`, 'success');
