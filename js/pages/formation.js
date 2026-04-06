@@ -6,7 +6,10 @@ let formationState = {
   matchId: null,
   match: null,
   teams: [],
-  suggestedTeams: null
+  suggestedTeams: null,
+  attendance: [],
+  results: [],
+  guestTeams: []
 };
 
 async function renderFormation(container, params = {}) {
@@ -34,6 +37,7 @@ async function renderFormation(container, params = {}) {
       formationState.match = detailRes.match;
       formationState.attendance = detailRes.attendance || [];
       formationState.results = detailRes.results || [];
+      formationState.guestTeams = detailRes.guestTeams || [];
     }
 
     if (teamsRes.success && teamsRes.teams.length > 0) {
@@ -66,7 +70,6 @@ function renderFormationUI(container) {
             <h1 class="text-2xl font-bold text-white">⚽ Đội hình thi đấu</h1>
             <p class="text-gray-400 text-sm mt-0.5">${match?.venue_name || ''} · ${formatDate(match?.match_date)} · ${formatTime(match?.start_time)}</p>
           </div>
-          <!-- Action buttons -->
           <div class="flex gap-2 flex-wrap">
             ${yesPlayers.length > 0 ? `
               <button onclick="runSuggestTeams()" class="btn btn-gold">
@@ -77,39 +80,39 @@ function renderFormationUI(container) {
               <button onclick="saveCurrentTeams()" class="btn btn-primary">
                 <i class="fas fa-save"></i> Lưu đội hình
               </button>
-              <button onclick="openResultsSection()" class="btn btn-secondary">
-                <i class="fas fa-futbol"></i> Nhập kết quả
+              <button onclick="openLiveMatch()" class="btn btn-live">
+                <i class="fas fa-circle" style="color:#ef4444;animation:pulse 1.5s infinite"></i> Live thi đấu
               </button>
             ` : ''}
           </div>
         </div>
       </div>
 
-      <!-- Step guide banner -->
+      <!-- Step guide -->
       <div class="bg-gray-800 border border-gray-700 rounded-xl p-4">
-        <p class="text-gray-300 text-sm font-semibold mb-2">📋 Hướng dẫn sử dụng trang này:</p>
+        <p class="text-gray-300 text-sm font-semibold mb-2">📋 Hướng dẫn:</p>
         <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
           <span class="${hasTeams ? 'text-green-400' : ''}">
             ${hasTeams ? '✅' : '①'} Xem đội hình bên dưới
           </span>
           <span>② <strong class="text-amber-300">Kéo thả</strong> card cầu thủ giữa các cột để đổi đội</span>
-          <span>③ Nhấn <strong class="text-green-400">Lưu đội hình</strong> sau khi điều chỉnh xong</span>
-          <span>④ Nhấn <strong class="text-blue-400">Nhập kết quả</strong> để tạo vòng tròn và ghi tỉ số</span>
+          <span>③ Nhấn <strong class="text-white/80 cursor-pointer">tên đội</strong> để đổi tên</span>
+          <span>④ Nhấn <strong class="text-green-400">Lưu đội hình</strong> sau khi điều chỉnh xong</span>
+          <span>⑤ Nhấn <strong class="text-red-400">Live thi đấu</strong> để ghi tỉ số trực tiếp</span>
         </div>
       </div>
 
-      <!-- Attendance info -->
+      <!-- Attendance - chỉ YES và NO -->
       <div class="card py-3 px-4">
         <div class="flex items-center gap-4 text-sm flex-wrap">
           <span class="text-green-400 font-semibold">✅ ${yesPlayers.length} tham gia</span>
-          <span class="text-amber-400">🤔 ${attendance.filter(a => a.vote_status === 'MAYBE').length} có thể</span>
           <span class="text-red-400">❌ ${attendance.filter(a => a.vote_status === 'NO').length} không tham gia</span>
           <span class="text-gray-500">|</span>
           <span class="text-gray-400">${match?.num_teams || 2} đội · ${match?.num_players_per_team || 5} người/đội</span>
         </div>
       </div>
 
-      <!-- Guest team section -->
+      <!-- Guest teams -->
       <div id="guest-section">${renderGuestSection()}</div>
 
       <!-- Teams area -->
@@ -129,31 +132,61 @@ function renderFormationUI(container) {
         }
       </div>
 
-      <!-- Results section (hidden by default) -->
-      <div id="results-section" class="hidden">
-        ${renderResultsSection()}
-      </div>
+      <!-- Results section - hiện mặc định khi có đội hình -->
+      ${hasTeams ? `<div id="results-section">${renderResultsSection()}</div>` : ''}
     </div>
   `;
 
-  // Initialize SortableJS for drag-and-drop if teams exist
   if (hasTeams) {
     initSortable();
   }
 }
 
+// ---- Guest Teams ----
+
 function renderGuestSection() {
-  const { matchId } = formationState;
+  const { matchId, guestTeams } = formationState;
   return `
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between mb-2">
       <h2 class="section-heading mb-0"><i class="fas fa-shield-alt text-gray-400"></i> Đội khách mời</h2>
       <button onclick="openAddGuestModal('${matchId}')" class="btn btn-secondary btn-sm">
         <i class="fas fa-plus mr-1"></i> Thêm đội khách
       </button>
     </div>
-    <div id="guest-teams-list" class="mt-2 flex gap-2 flex-wrap"></div>
+    <div id="guest-teams-list" class="flex gap-2 flex-wrap min-h-[2rem]">
+      ${guestTeams.length > 0
+        ? guestTeams.map(g => `
+            <div class="flex items-center gap-2 bg-gray-700 rounded-lg px-3 py-2">
+              <i class="fas fa-shield-alt text-gray-400 text-xs"></i>
+              <div>
+                <span class="text-white text-sm font-medium">${g.team_name}</span>
+                ${g.representative_name ? `<span class="text-gray-400 text-xs ml-1">(${g.representative_name})</span>` : ''}
+              </div>
+              <button onclick="removeGuestTeam('${g.guest_team_id}')" class="text-red-400 hover:text-red-300 text-xs ml-1">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          `).join('')
+        : '<p class="text-gray-500 text-xs py-1">Chưa có đội khách</p>'
+      }
+    </div>
   `;
 }
+
+async function removeGuestTeam(guestTeamId) {
+  showLoading(true);
+  try {
+    const res = await API.deleteGuestTeam(guestTeamId);
+    if (res.success) {
+      formationState.guestTeams = formationState.guestTeams.filter(g => g.guest_team_id !== guestTeamId);
+      document.getElementById('guest-section').innerHTML = renderGuestSection();
+      showToast('Đã xóa đội khách', 'success');
+    } else { showToast(res.error, 'error'); }
+  } catch(e) { showToast('Lỗi', 'error'); }
+  finally { showLoading(false); }
+}
+
+// ---- Teams Grid ----
 
 function renderTeamsGrid(teams) {
   const numTeams = teams.length;
@@ -163,17 +196,13 @@ function renderTeamsGrid(teams) {
     <div>
       <div class="flex items-center justify-between mb-3">
         <h2 class="section-heading mb-0"><i class="fas fa-users text-green-400"></i> Đội hình</h2>
-        ${teams.length >= 2 ? `
-          <div class="text-sm text-gray-400">
-            ${teams.map(t => `
-              <span style="color:${t.team_color}">${t.team_name}: avg ${calcAvgRating(t.players)}</span>
-            `).join(' · ')}
-          </div>
-        ` : ''}
+        <div class="text-sm text-gray-400 hidden sm:block">
+          ${teams.map(t => `<span style="color:${t.team_color}">${t.team_name}: avg ${calcAvgRating(t.players)}</span>`).join(' · ')}
+        </div>
       </div>
       <div class="bg-blue-900/30 border border-blue-800 rounded-xl px-4 py-2 mb-3 text-xs text-blue-300 flex items-center gap-2">
         <i class="fas fa-hand-pointer text-blue-400"></i>
-        <span><strong>Kéo thả</strong> card cầu thủ sang cột khác để đổi đội · Rating trung bình tự cập nhật · Nhấn <strong>Lưu đội hình</strong> khi xong</span>
+        <span><strong>Kéo thả</strong> card cầu thủ để đổi đội · Nhấn <strong>tên đội</strong> để đổi tên · Rating trung bình tự cập nhật</span>
       </div>
       <div class="grid grid-cols-1 ${gridCols} gap-4">
         ${teams.map((team, i) => renderTeamColumn(team, i)).join('')}
@@ -189,8 +218,11 @@ function renderTeamColumn(team, idx) {
       <div class="team-header" style="background:${team.team_color}22; border-bottom: 2px solid ${team.team_color}">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded-full" style="background:${team.team_color}"></div>
-            <span style="color:${team.team_color}">${team.team_name}</span>
+            <div class="w-4 h-4 rounded-full flex-shrink-0" style="background:${team.team_color}"></div>
+            <span id="team-name-${idx}" style="color:${team.team_color}" class="cursor-pointer hover:opacity-80 font-bold"
+              onclick="startEditTeamName(${idx})"
+              title="Nhấn để đổi tên">${team.team_name}</span>
+            <i class="fas fa-pencil-alt text-xs opacity-30 cursor-pointer" onclick="startEditTeamName(${idx})"></i>
           </div>
           <div class="text-gray-400 text-sm font-normal">OVR avg: <span style="color:${team.team_color}" class="font-bold">${avgRating}</span></div>
         </div>
@@ -205,6 +237,33 @@ function renderTeamColumn(team, idx) {
       </div>
     </div>
   `;
+}
+
+function startEditTeamName(idx) {
+  const el = document.getElementById(`team-name-${idx}`);
+  if (!el) return;
+  const currentName = formationState.teams[idx]?.team_name || '';
+  const color = formationState.teams[idx]?.team_color || '#fff';
+  el.outerHTML = `<input type="text" id="team-name-${idx}"
+    value="${currentName}"
+    style="color:${color};background:transparent;border:none;border-bottom:1px solid ${color};outline:none;font-weight:700;width:120px;font-size:15px;"
+    onblur="saveTeamName(${idx}, this.value)"
+    onkeydown="if(event.key==='Enter')this.blur()"
+    autofocus />`;
+  document.getElementById(`team-name-${idx}`)?.select();
+}
+
+function saveTeamName(idx, newName) {
+  const name = newName.trim() || formationState.teams[idx]?.team_name || 'Đội';
+  if (formationState.teams[idx]) {
+    formationState.teams[idx].team_name = name;
+  }
+  const color = formationState.teams[idx]?.team_color || '#fff';
+  const el = document.getElementById(`team-name-${idx}`);
+  if (el) {
+    el.outerHTML = `<span id="team-name-${idx}" style="color:${color}" class="cursor-pointer hover:opacity-80 font-bold"
+      onclick="startEditTeamName(${idx})" title="Nhấn để đổi tên">${name}</span>`;
+  }
 }
 
 function renderPlayerCard(player) {
@@ -252,7 +311,7 @@ function initSortable() {
   });
 }
 
-function onPlayerMoved(evt) {
+function onPlayerMoved() {
   document.querySelectorAll('.sortable-list').forEach((list, idx) => {
     const cards = list.querySelectorAll('.player-card');
     let total = 0;
@@ -297,9 +356,6 @@ async function runSuggestTeams() {
 
       const diff = res.balanceScore !== null ? `(chênh lệch: ${res.balanceScore} điểm)` : '';
       showToast(`Đã xếp ${formationState.teams.length} đội ${diff}`, 'success');
-
-      // Show save button
-      document.querySelector('[onclick="saveCurrentTeams()"]')?.classList.remove('hidden');
     } else {
       showToast(res.error, 'error');
     }
@@ -326,8 +382,12 @@ async function saveCurrentTeams() {
       });
     });
 
+    // Lấy tên từ state (đã được đổi tên nếu user edit)
+    const nameEl = document.getElementById(`team-name-${idx}`);
+    const teamName = nameEl?.textContent?.trim() || team.team_name;
+
     teamsData.push({
-      name: team.team_name,
+      name: teamName,
       color: team.team_color,
       team_type: 'internal',
       players
@@ -343,7 +403,6 @@ async function saveCurrentTeams() {
     const res = await API.saveTeams(formationState.matchId, teamsData);
     if (res.success) {
       showToast('Đã lưu đội hình!', 'success');
-      // Reload
       renderFormation(document.getElementById('page-content'), { match_id: formationState.matchId });
     } else { showToast(res.error, 'error'); }
   } catch (e) { showToast('Lỗi', 'error'); }
@@ -352,25 +411,6 @@ async function saveCurrentTeams() {
 
 // ---- Results Section ----
 
-function openResultsSection() {
-  const section = document.getElementById('results-section');
-  section.classList.remove('hidden');
-  section.scrollIntoView({ behavior: 'smooth' });
-  refreshResultsSection();
-}
-
-async function refreshResultsSection() {
-  showLoading(true);
-  try {
-    const resultsRes = await API.getResults(formationState.matchId);
-    if (resultsRes.success) {
-      formationState.results = resultsRes.results || [];
-    }
-    document.getElementById('results-section').innerHTML = renderResultsSection();
-  } catch (e) {}
-  finally { showLoading(false); }
-}
-
 function renderResultsSection() {
   const { teams, results } = formationState;
   if (teams.length < 2) return '';
@@ -378,24 +418,65 @@ function renderResultsSection() {
   const teamMap = {};
   teams.forEach(t => { teamMap[t.team_id] = t; });
 
+  // Nhóm kết quả theo lượt (round_number = số lượt)
+  const legs = {};
+  results.forEach(r => {
+    const leg = r.round_number || 1;
+    if (!legs[leg]) legs[leg] = [];
+    legs[leg].push(r);
+  });
+  const legKeys = Object.keys(legs).map(Number).sort((a, b) => a - b);
+
+  const hasResults = results.length > 0;
+  const completedCount = results.filter(r => r.status === 'completed').length;
+
   return `
     <div>
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="section-heading mb-0"><i class="fas fa-futbol text-green-400"></i> Kết quả vòng tròn</h2>
-        <button onclick="generateRoundRobin()" class="btn btn-secondary btn-sm">
-          <i class="fas fa-sync mr-1"></i> Tạo lịch vòng tròn
-        </button>
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="section-heading mb-0"><i class="fas fa-futbol text-green-400"></i> Kết quả vòng tròn
+          ${hasResults ? `<span class="text-sm font-normal text-gray-400 ml-2">(${completedCount}/${results.length} trận xong)</span>` : ''}
+        </h2>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-gray-400 text-xs">Tạo lịch:</span>
+          <button onclick="confirmGenerateSchedule(1)" class="btn btn-secondary btn-sm">1 lượt</button>
+          <button onclick="confirmGenerateSchedule(2)" class="btn btn-secondary btn-sm">2 lượt</button>
+          <button onclick="confirmGenerateSchedule(3)" class="btn btn-secondary btn-sm">3 lượt</button>
+        </div>
       </div>
-      ${results.length > 0
-        ? `<div class="space-y-3">
-            ${results.map(r => renderResultRow(r, teamMap)).join('')}
+
+      ${!hasResults
+        ? `<div class="card text-center py-8">
+            <div class="text-4xl mb-3">📅</div>
+            <p class="text-white font-semibold">Chưa có lịch thi đấu</p>
+            <p class="text-gray-400 text-sm mt-1">Nhấn "1 lượt", "2 lượt" hoặc "3 lượt" để tạo vòng tròn</p>
           </div>`
-        : `<div class="card text-center py-6">
-            <p class="text-gray-400">Nhấn "Tạo lịch vòng tròn" để tạo các cặp đấu</p>
-          </div>`
+        : legKeys.map(leg => `
+            <div class="mb-4">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-amber-400 font-semibold text-sm">
+                  ${leg === 1 ? '🏃 Lượt đi' : leg === 2 ? '🔄 Lượt về' : `🔁 Lượt ${leg}`}
+                </span>
+                <span class="text-gray-500 text-xs">(${legs[leg].filter(r => r.status === 'completed').length}/${legs[leg].length} xong)</span>
+              </div>
+              <div class="space-y-2">
+                ${legs[leg].map(r => renderResultRow(r, teamMap)).join('')}
+              </div>
+            </div>
+          `).join('')
       }
     </div>
   `;
+}
+
+async function refreshResultsSection() {
+  try {
+    const res = await API.getResults(formationState.matchId);
+    if (res.success) {
+      formationState.results = res.results || [];
+    }
+    const section = document.getElementById('results-section');
+    if (section) section.innerHTML = renderResultsSection();
+  } catch (e) {}
 }
 
 function renderResultRow(result, teamMap) {
@@ -404,14 +485,14 @@ function renderResultRow(result, teamMap) {
   const isCompleted = result.status === 'completed';
 
   return `
-    <div class="card py-4 px-5">
-      <div class="flex items-center gap-3">
+    <div class="card py-3 px-4">
+      <div class="flex items-center gap-2">
         <div class="flex-1 text-right">
-          <span class="text-white font-semibold" style="color:${home.team_color || '#fff'}">${home.team_name || 'Đội 1'}</span>
+          <span class="font-semibold text-sm" style="color:${home.team_color || '#fff'}">${home.team_name || 'Đội 1'}</span>
         </div>
 
         ${isCompleted
-          ? `<div class="text-white font-bold text-xl mx-2 min-w-[60px] text-center">
+          ? `<div class="text-white font-bold text-xl mx-3 min-w-[70px] text-center">
               ${result.score_home} - ${result.score_away}
             </div>`
           : `<div class="flex items-center gap-2 mx-2">
@@ -424,22 +505,27 @@ function renderResultRow(result, teamMap) {
         }
 
         <div class="flex-1">
-          <span class="text-white font-semibold" style="color:${away.team_color || '#fff'}">${away.team_name || 'Đội 2'}</span>
+          <span class="font-semibold text-sm" style="color:${away.team_color || '#fff'}">${away.team_name || 'Đội 2'}</span>
         </div>
 
-        ${!isCompleted ? `
-          <button onclick="submitResult('${result.result_id}', '${result.match_id}', '${result.team_home_id}', '${result.team_away_id}')"
-            class="btn btn-primary btn-sm">
-            <i class="fas fa-check"></i>
-          </button>
-        ` : `<span class="badge badge-completed">✅ Xong</span>`}
+        ${isCompleted
+          ? `<span class="badge badge-completed text-xs">✅</span>`
+          : `<button onclick="submitResult('${result.result_id}', '${result.match_id || formationState.matchId}', '${result.team_home_id}', '${result.team_away_id}')"
+              class="btn btn-primary btn-sm flex-shrink-0">
+              <i class="fas fa-check"></i>
+            </button>`
+        }
       </div>
 
+      <!-- Scorers row -->
       ${isCompleted ? `
-        <div class="mt-3 pt-3 border-t border-gray-700">
-          <button onclick="openScorerModal('${result.result_id}', '${result.match_id}', '${result.team_home_id}', '${result.team_away_id}')"
-            class="btn btn-secondary btn-sm">
-            <i class="fas fa-medal mr-1"></i> Ghi bàn / Kiến tạo
+        <div class="mt-2 pt-2 border-t border-gray-700 flex items-center justify-between">
+          <div class="text-gray-500 text-xs flex-1">
+            ${result.scorers_summary || ''}
+          </div>
+          <button onclick="openScorerModal('${result.result_id}', '${result.match_id || formationState.matchId}', '${result.team_home_id}', '${result.team_away_id}')"
+            class="btn btn-secondary btn-sm text-xs">
+            <i class="fas fa-medal mr-1"></i> Ghi bàn
           </button>
         </div>
       ` : ''}
@@ -447,14 +533,34 @@ function renderResultRow(result, teamMap) {
   `;
 }
 
-async function generateRoundRobin() {
+function confirmGenerateSchedule(numRounds) {
+  const hasCompleted = formationState.results.some(r => r.status === 'completed');
+  if (hasCompleted) {
+    openModal(`
+      <div class="p-6 text-center">
+        <div class="text-4xl mb-4">⚠️</div>
+        <h3 class="text-white font-semibold text-lg mb-2">Tạo lại lịch?</h3>
+        <p class="text-gray-400 mb-1">Đã có kết quả đã hoàn thành.</p>
+        <p class="text-gray-400 mb-5 text-sm">Lịch cũ chưa hoàn thành sẽ bị xóa. Tiếp tục?</p>
+        <div class="flex gap-3 justify-center">
+          <button onclick="closeModal()" class="btn btn-secondary">Hủy</button>
+          <button onclick="closeModal(); generateRoundRobin(${numRounds})" class="btn btn-primary">Tạo ${numRounds} lượt</button>
+        </div>
+      </div>
+    `);
+  } else {
+    generateRoundRobin(numRounds);
+  }
+}
+
+async function generateRoundRobin(numRounds = 1) {
   showLoading(true);
   try {
-    const res = await API.generateSchedule(formationState.matchId);
+    const res = await API.call('generateSchedule', { match_id: formationState.matchId, num_rounds: numRounds });
     if (res.success) {
-      showToast(`Đã tạo ${res.schedule.length} cặp đấu`, 'success');
+      showToast(`Đã tạo ${res.schedule.length} trận (${numRounds} lượt)`, 'success');
       refreshResultsSection();
-    } else { showToast(res.error, 'error'); }
+    } else { showToast(res.error || 'Lỗi tạo lịch', 'error'); }
   } catch (e) { showToast('Lỗi', 'error'); }
   finally { showLoading(false); }
 }
@@ -477,6 +583,8 @@ async function submitResult(resultId, matchId, homeId, awayId) {
     });
     if (res.success) {
       showToast('Đã lưu kết quả & cập nhật ELO!', 'success');
+      // Mở modal nhập cầu thủ ghi bàn ngay
+      openScorerModal(resultId, matchId, homeId, awayId);
       refreshResultsSection();
     } else { showToast(res.error, 'error'); }
   } catch (e) { showToast('Lỗi', 'error'); }
@@ -485,37 +593,54 @@ async function submitResult(resultId, matchId, homeId, awayId) {
 
 function openScorerModal(resultId, matchId, homeId, awayId) {
   const { teams } = formationState;
-  const homePlayers = (teams.find(t => t.team_id === homeId)?.players || []);
-  const awayPlayers = (teams.find(t => t.team_id === awayId)?.players || []);
-  const allPlayers = [...homePlayers, ...awayPlayers].filter(p => p.user_id);
+  const homeTeam = teams.find(t => t.team_id === homeId) || {};
+  const awayTeam = teams.find(t => t.team_id === awayId) || {};
+  const homePlayers = (homeTeam.players || []).filter(p => p.user_id);
+  const awayPlayers = (awayTeam.players || []).filter(p => p.user_id);
 
   openModal(`
-    <div class="p-6">
-      <div class="flex items-center justify-between mb-5">
-        <h3 class="text-white font-bold text-lg">Ghi bàn / Kiến tạo</h3>
+    <div class="p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-white font-bold text-lg">⚽ Ghi bàn / Kiến tạo</h3>
         <button onclick="closeModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
       </div>
-      <div class="space-y-3" id="scorer-list">
-        ${allPlayers.map(p => `
-          <div class="flex items-center gap-3 bg-gray-700 rounded-xl p-3">
-            <div class="flex-1 text-white font-medium text-sm">${p.full_name}</div>
-            <div class="flex items-center gap-2">
-              <label class="text-gray-400 text-xs">⚽</label>
-              <input type="number" min="0" max="20" value="0" class="score-input w-12 text-sm"
-                id="goals-${p.user_id}" />
-              <label class="text-gray-400 text-xs">🎯</label>
-              <input type="number" min="0" max="20" value="0" class="score-input w-12 text-sm"
-                id="assists-${p.user_id}" />
-            </div>
-          </div>
-        `).join('')}
-      </div>
-      <button onclick="submitScorers('${matchId}', [${allPlayers.map(p => `'${p.user_id}'`).join(',')}])"
-        class="btn btn-primary w-full justify-center mt-4">
+
+      ${homePlayers.length > 0 ? `
+        <p class="text-xs font-semibold mb-2" style="color:${homeTeam.team_color || '#fff'}">${homeTeam.team_name || 'Đội nhà'}</p>
+        <div class="space-y-2 mb-4">
+          ${homePlayers.map(p => renderScorerRow(p)).join('')}
+        </div>
+      ` : ''}
+
+      ${awayPlayers.length > 0 ? `
+        <p class="text-xs font-semibold mb-2" style="color:${awayTeam.team_color || '#fff'}">${awayTeam.team_name || 'Đội khách'}</p>
+        <div class="space-y-2 mb-4">
+          ${awayPlayers.map(p => renderScorerRow(p)).join('')}
+        </div>
+      ` : ''}
+
+      <button onclick="submitScorers('${matchId}', [${[...homePlayers, ...awayPlayers].map(p => `'${p.user_id}'`).join(',')}])"
+        class="btn btn-primary w-full justify-center mt-2">
         <i class="fas fa-save mr-2"></i> Lưu thống kê
       </button>
     </div>
   `);
+}
+
+function renderScorerRow(player) {
+  return `
+    <div class="flex items-center gap-3 bg-gray-700 rounded-xl p-3">
+      <div class="flex-1 text-white font-medium text-sm">${player.full_name}</div>
+      <div class="flex items-center gap-2">
+        <span class="text-gray-400 text-xs">⚽</span>
+        <input type="number" min="0" max="20" value="0" class="score-input" style="width:48px;font-size:16px;"
+          id="goals-${player.user_id}" />
+        <span class="text-gray-400 text-xs">🎯</span>
+        <input type="number" min="0" max="20" value="0" class="score-input" style="width:48px;font-size:16px;"
+          id="assists-${player.user_id}" />
+      </div>
+    </div>
+  `;
 }
 
 async function submitScorers(matchId, userIds) {
@@ -527,7 +652,6 @@ async function submitScorers(matchId, userIds) {
 
   showLoading(true);
   try {
-    // Update scorers via saveMatchResult with scorers array
     const res = await API.call('saveMatchResult', {
       match_id: matchId,
       team_home_id: '',
@@ -537,12 +661,17 @@ async function submitScorers(matchId, userIds) {
       status: 'update_scorers',
       scorers
     });
-    if (res.success || true) { // Always close and show success
-      closeModal();
-      showToast('Đã lưu thống kê ghi bàn!', 'success');
-    }
+    closeModal();
+    showToast('Đã lưu thống kê ghi bàn!', 'success');
   } catch (e) { showToast('Lỗi', 'error'); }
   finally { showLoading(false); }
+}
+
+// ---- Live Match ----
+
+function openLiveMatch() {
+  window._liveMatchId = formationState.matchId;
+  navigateTo('live', { match_id: formationState.matchId });
 }
 
 // ---- Add Guest Team Modal ----
@@ -595,9 +724,13 @@ async function submitAddGuest(matchId) {
     if (res.success) {
       closeModal();
       showToast('Đã thêm đội khách!', 'success');
+      // Reload guest teams và cập nhật UI
+      const guestsRes = await API.getGuestTeams(matchId);
+      if (guestsRes.success) {
+        formationState.guestTeams = guestsRes.guestTeams || guestsRes.teams || [];
+      }
+      document.getElementById('guest-section').innerHTML = renderGuestSection();
     } else { showToast(res.error, 'error'); }
   } catch (e) { showToast('Lỗi', 'error'); }
   finally { showLoading(false); }
 }
-
-// formation đã được đăng ký trong PAGES tại app.js
