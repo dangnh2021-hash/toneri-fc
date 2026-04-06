@@ -52,7 +52,15 @@ async function renderFormation(container, params = {}) {
 function renderFormationUI(container) {
   const { match, teams, attendance, isAdmin } = formationState;
   const yesPlayers = attendance.filter(a => a.vote_status === 'YES');
-  const hasTeams = teams.length > 0;
+  const yesUserIds = new Set(yesPlayers.map(a => a.user_id));
+
+  // Lọc đội hình đã lưu: chỉ giữ cầu thủ đã vote YES (guest player không có user_id thì giữ)
+  formationState.teams = teams.map(t => ({
+    ...t,
+    players: t.players.filter(p => !p.user_id || yesUserIds.has(p.user_id))
+  }));
+
+  const hasTeams = formationState.teams.length > 0;
 
   container.innerHTML = `
     <div class="space-y-5">
@@ -119,7 +127,7 @@ function renderFormationUI(container) {
       <!-- Teams area -->
       <div id="teams-container">
         ${hasTeams
-          ? renderTeamsGrid(teams)
+          ? renderTeamsGrid(formationState.teams)
           : isAdmin && yesPlayers.length > 0
             ? `<div class="card text-center py-10">
                 <div class="text-5xl mb-3">⚙️</div>
