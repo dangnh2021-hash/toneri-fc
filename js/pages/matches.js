@@ -147,14 +147,13 @@ async function openMatchDetail(matchId) {
 
         <!-- My Vote -->
         <div>
-          <p class="text-gray-300 text-sm font-medium mb-2">Vote của bạn:
-            ${myVote ? `<span class="badge ${myVote.vote_status === 'YES' ? 'badge-yes' : myVote.vote_status === 'NO' ? 'badge-no' : 'badge-maybe'}">${myVote.vote_status}</span>` : '<span class="text-gray-500">Chưa vote</span>'}
+          <p class="text-gray-300 text-sm font-medium mb-2">Trạng thái của bạn:
+            ${myVote ? `<span class="badge ${myVote.vote_status === 'YES' ? 'badge-yes' : 'badge-no'}">${myVote.vote_status === 'YES' ? '✅ Tham gia' : '❌ Không tham gia'}</span>` : '<span class="text-gray-500">Chưa xác nhận</span>'}
           </p>
           ${match.status === 'scheduled' ? `
             <div class="flex gap-2">
               <button class="vote-btn yes ${myVote?.vote_status === 'YES' ? 'active' : ''}" onclick="submitVoteFromModal('${matchId}', 'YES')">✅ Tham gia</button>
-              <button class="vote-btn no ${myVote?.vote_status === 'NO' ? 'active' : ''}" onclick="submitVoteFromModal('${matchId}', 'NO')">❌ Không</button>
-              <button class="vote-btn maybe ${myVote?.vote_status === 'MAYBE' ? 'active' : ''}" onclick="submitVoteFromModal('${matchId}', 'MAYBE')">🤔 Có thể</button>
+              <button class="vote-btn no ${myVote?.vote_status === 'NO' ? 'active' : ''}" onclick="submitVoteFromModal('${matchId}', 'NO')">❌ Không tham gia</button>
             </div>
           ` : ''}
         </div>
@@ -163,8 +162,7 @@ async function openMatchDetail(matchId) {
         <div>
           <p class="text-gray-400 text-sm mb-3">
             <span class="text-green-400 font-semibold">✅ ${yesPlayers.length} tham gia</span>
-            · <span class="text-amber-400">🤔 ${maybePlayers.length}</span>
-            · <span class="text-red-400">❌ ${noPlayers.length}</span>
+            · <span class="text-red-400">❌ ${noPlayers.length} không tham gia</span>
           </p>
           ${yesPlayers.length > 0 ? `
             <div class="flex flex-wrap gap-2">
@@ -245,7 +243,7 @@ async function submitVoteFromModal(matchId, voteStatus) {
       showToast(res.message, 'success');
       // Update vote buttons in modal
       document.querySelectorAll('.vote-btn').forEach(btn => {
-        const btnVote = btn.classList.contains('yes') ? 'YES' : btn.classList.contains('no') ? 'NO' : 'MAYBE';
+        const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
         btn.classList.toggle('active', btnVote === voteStatus);
       });
     } else {

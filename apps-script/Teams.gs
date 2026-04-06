@@ -264,56 +264,77 @@ function getTeams(data) {
 
 function saveMatchResult(data) {
   const admin = requireAdmin(data);
-  const { match_id, round_number, team_home_id, team_away_id, score_home, score_away,
+  const { match_id, result_id, round_number, team_home_id, team_away_id, score_home, score_away,
           scorers, status } = data;
 
-  if (!match_id || team_home_id === undefined || team_away_id === undefined) {
-    return error('Thiếu thông tin kết quả');
-  }
+  if (!match_id) return error('Thiếu match_id');
 
   const sheet = getSheet('MATCH_RESULTS');
   const allData = sheet.getDataRange().getValues();
   const headers = allData[0];
+  const resultIdCol = headers.indexOf('result_id');
 
-  // Tìm kết quả cũ của cặp này
-  for (let i = 1; i < allData.length; i++) {
-    if (allData[i][headers.indexOf('match_id')] === match_id &&
-        allData[i][headers.indexOf('round_number')] == round_number &&
-        allData[i][headers.indexOf('team_home_id')] === team_home_id &&
-        allData[i][headers.indexOf('team_away_id')] === team_away_id) {
-      // Cập nhật
-      sheet.getRange(i + 1, headers.indexOf('score_home') + 1).setValue(score_home);
-      sheet.getRange(i + 1, headers.indexOf('score_away') + 1).setValue(score_away);
-      sheet.getRange(i + 1, headers.indexOf('status') + 1).setValue(status || 'completed');
-      sheet.getRange(i + 1, headers.indexOf('ended_at') + 1).setValue(nowISO());
-
-      if (status === 'completed') {
-        updateScorers(match_id, scorers || []);
-        updateTeamScores(match_id, team_home_id, team_away_id, score_home, score_away);
-        updatePlayerELO(match_id, team_home_id, team_away_id, score_home, score_away);
+  // Tìm theo result_id (ưu tiên) hoặc theo cặp đội
+  let foundRow = -1;
+  if (result_id) {
+    for (let i = 1; i < allData.length; i++) {
+      if (String(allData[i][resultIdCol]) === String(result_id)) {
+        foundRow = i;
+        break;
       }
-
-      return success({ message: 'Đã cập nhật kết quả', result_id: allData[i][0] });
     }
   }
 
-  // Tạo mới
-  const resultId = generateId('RES');
+  if (foundRow > 0) {
+    // Chỉ update scorers, không update score/status
+    if (status === 'update_scorers') {
+      updateScorers(match_id, scorers || []);
+      return success({ message: 'Đã cập nhật thống kê', result_id });
+    }
+
+    // Cập nhật kết quả
+    sheet.getRange(foundRow + 1, headers.indexOf('score_home') + 1).setValue(Number(score_home) || 0);
+    sheet.getRange(foundRow + 1, headers.indexOf('score_away') + 1).setValue(Number(score_away) || 0);
+    sheet.getRange(foundRow + 1, headers.indexOf('status') + 1).setValue(status || 'completed');
+    sheet.getRange(foundRow + 1, headers.indexOf('ended_at') + 1).setValue(nowISO());
+
+    const actualHomeId = team_home_id || String(allData[foundRow][headers.indexOf('team_home_id')]);
+    const actualAwayId = team_away_id || String(allData[foundRow][headers.indexOf('team_away_id')]);
+
+    if (status === 'completed') {
+      updateScorers(match_id, scorers || []);
+      updateTeamScores(match_id, actualHomeId, actualAwayId, score_home, score_away);
+      updatePlayerELO(match_id, actualHomeId, actualAwayId, score_home, score_away);
+    }
+
+    return success({ message: 'Đã cập nhật kết quả', result_id });
+  }
+
+  // Chỉ update scorers cho match không có result_id cụ thể
+  if (status === 'update_scorers') {
+    updateScorers(match_id, scorers || []);
+    return success({ message: 'Đã cập nhật thống kê' });
+  }
+
+  // Tạo mới nếu không tìm thấy
+  if (!team_home_id || !team_away_id) return error('Thiếu thông tin đội');
+
+  const newResultId = generateId('RES');
   sheet.appendRow([
-    resultId, match_id, round_number || 1,
+    newResultId, match_id, round_number || 1,
     team_home_id, team_away_id,
-    score_home || 0, score_away || 0,
-    status || 'pending',
+    Number(score_home) || 0, Number(score_away) || 0,
+    status || 'completed',
     nowISO(), '', ''
   ]);
 
-  if ((status || 'pending') === 'completed') {
+  if ((status || 'completed') === 'completed') {
     updateScorers(match_id, scorers || []);
     updateTeamScores(match_id, team_home_id, team_away_id, score_home, score_away);
     updatePlayerELO(match_id, team_home_id, team_away_id, score_home, score_away);
   }
 
-  return success({ message: 'Đã lưu kết quả', result_id: resultId });
+  return success({ message: 'Đã lưu kết quả', result_id: newResultId });
 }
 
 function updateScorers(match_id, scorers) {
@@ -384,40 +405,47 @@ function getResults(data) {
 
 function generateRoundRobinSchedule(data) {
   const admin = requireAdmin(data);
-  const { match_id } = data;
+  const { match_id, num_rounds } = data;
+  const numRounds = Math.max(1, Math.min(5, Number(num_rounds) || 1));
 
   const teams = getSheetData('MATCH_TEAMS').filter(t => t.match_id === match_id);
   if (teams.length < 2) return error('Cần ít nhất 2 đội');
 
   const sheet = getSheet('MATCH_RESULTS');
-  let round = 1;
 
-  // Xóa kết quả cũ (chỉ những cái pending)
+  // Xóa kết quả cũ chưa hoàn thành
   const existing = getSheetData('MATCH_RESULTS').filter(r => r.match_id === match_id);
   existing.forEach(r => {
-    if (r.status === 'pending') {
+    if (r.status === 'pending' || r.status === 'live') {
       const row = findRowByValue('MATCH_RESULTS', 0, r.result_id);
       if (row) sheet.deleteRow(row.rowNum);
     }
   });
 
-  // Tạo lịch vòng tròn
   const teamIds = teams.map(t => t.team_id);
   const results = [];
 
-  for (let i = 0; i < teamIds.length; i++) {
-    for (let j = i + 1; j < teamIds.length; j++) {
-      const resultId = generateId('RES');
-      sheet.appendRow([
-        resultId, match_id, round,
-        teamIds[i], teamIds[j],
-        0, 0, 'pending',
-        '', '', ''
-      ]);
-      results.push({ result_id: resultId, home: teams[i].team_name, away: teams[j].team_name });
-      round++;
+  // Mỗi lượt = 1 leg (round_number = leg number)
+  for (let leg = 1; leg <= numRounds; leg++) {
+    for (let i = 0; i < teamIds.length; i++) {
+      for (let j = i + 1; j < teamIds.length; j++) {
+        const resultId = generateId('RES');
+        sheet.appendRow([
+          resultId, match_id, leg,
+          teamIds[i], teamIds[j],
+          0, 0, 'pending',
+          '', '', ''
+        ]);
+        results.push({
+          result_id: resultId,
+          home: teams[i].team_name,
+          away: teams[j].team_name,
+          leg
+        });
+      }
     }
   }
 
-  return success({ message: `Đã tạo ${results.length} cặp đấu vòng tròn`, schedule: results });
+  const legLabel = numRounds === 1 ? '1 lượt' : `${numRounds} lượt`;
+  return success({ message: `Đã tạo ${results.length} trận (${legLabel})`, schedule: results });
 }
