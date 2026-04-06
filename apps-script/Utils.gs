@@ -100,25 +100,36 @@ function validateToken(token) {
   const headers = data[0];
   const tokenCol = headers.indexOf('session_token');
   const expiryCol = headers.indexOf('token_expiry');
+  const now = new Date();
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][tokenCol] === token) {
-      const expiry = data[i][expiryCol];
-      if (expiry && new Date(expiry) > new Date()) {
-        const userIdCol = headers.indexOf('user_id');
-        const usernameCol = headers.indexOf('username');
-        const fullNameCol = headers.indexOf('full_name');
-        const isAdminCol = headers.indexOf('is_admin');
-        const positionsCol = headers.indexOf('positions');
-        return {
-          user_id: data[i][userIdCol],
-          username: data[i][usernameCol],
-          full_name: data[i][fullNameCol],
-          is_admin: data[i][isAdminCol] === true || data[i][isAdminCol] === 'true',
-          positions: data[i][positionsCol],
-          rowNum: i + 1
-        };
-      }
+    const raw = String(data[i][tokenCol] || '');
+    if (!raw) continue;
+
+    // Parse sessions array; fall back to legacy single-token format
+    let sessions = [];
+    try {
+      const parsed = JSON.parse(raw);
+      sessions = Array.isArray(parsed) ? parsed : [{ t: raw, e: data[i][expiryCol] }];
+    } catch (e) {
+      sessions = [{ t: raw, e: data[i][expiryCol] }];
+    }
+
+    const match = sessions.find(s => s.t === token && s.e && new Date(s.e) > now);
+    if (match) {
+      const userIdCol = headers.indexOf('user_id');
+      const usernameCol = headers.indexOf('username');
+      const fullNameCol = headers.indexOf('full_name');
+      const isAdminCol = headers.indexOf('is_admin');
+      const positionsCol = headers.indexOf('positions');
+      return {
+        user_id: data[i][userIdCol],
+        username: data[i][usernameCol],
+        full_name: data[i][fullNameCol],
+        is_admin: data[i][isAdminCol] === true || data[i][isAdminCol] === 'true',
+        positions: data[i][positionsCol],
+        rowNum: i + 1
+      };
     }
   }
   return null;

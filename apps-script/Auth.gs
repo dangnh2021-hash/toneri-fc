@@ -18,13 +18,26 @@ function login(data) {
       if (rows[i][statusCol] === 'inactive') return error('Tài khoản đã bị vô hiệu hóa');
 
       const token = generateToken();
-      const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h
+      const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 ngày
 
-      // Cập nhật token và last_login
+      // Cập nhật sessions array (hỗ trợ nhiều thiết bị đăng nhập cùng lúc)
       const tokenCol = headers.indexOf('session_token');
       const expiryCol = headers.indexOf('token_expiry');
       const lastLoginCol = headers.indexOf('last_login');
-      sheet.getRange(i + 1, tokenCol + 1).setValue(token);
+
+      let sessions = [];
+      try {
+        const raw = String(rows[i][tokenCol] || '');
+        const parsed = raw ? JSON.parse(raw) : [];
+        sessions = Array.isArray(parsed) ? parsed : [];
+      } catch (e) { sessions = []; }
+
+      // Xóa session đã hết hạn, giữ tối đa 5 sessions
+      const now = new Date();
+      sessions = sessions.filter(s => s.e && new Date(s.e) > now).slice(-4);
+      sessions.push({ t: token, e: expiry });
+
+      sheet.getRange(i + 1, tokenCol + 1).setValue(JSON.stringify(sessions));
       sheet.getRange(i + 1, expiryCol + 1).setValue(expiry);
       sheet.getRange(i + 1, lastLoginCol + 1).setValue(nowISO());
 
@@ -102,9 +115,18 @@ function logout(data) {
   const sheet = getSheet('USERS');
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const tokenCol = headers.indexOf('session_token');
-  const expiryCol = headers.indexOf('token_expiry');
-  sheet.getRange(user.rowNum, tokenCol + 1).setValue('');
-  sheet.getRange(user.rowNum, expiryCol + 1).setValue('');
+
+  // Chỉ xóa token của thiết bị hiện tại, không ảnh hưởng thiết bị khác
+  const raw = String(sheet.getRange(user.rowNum, tokenCol + 1).getValue() || '');
+  let sessions = [];
+  try {
+    const parsed = raw ? JSON.parse(raw) : [];
+    sessions = Array.isArray(parsed) ? parsed : [];
+  } catch (e) { sessions = []; }
+
+  sessions = sessions.filter(s => s.t !== data.token);
+  sheet.getRange(user.rowNum, tokenCol + 1).setValue(sessions.length ? JSON.stringify(sessions) : '');
+
   return success({ message: 'Đăng xuất thành công' });
 }
 
