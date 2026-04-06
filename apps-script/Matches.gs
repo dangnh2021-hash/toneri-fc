@@ -100,7 +100,7 @@ function getMatchDetail(data) {
   if (!row) return error('Không tìm thấy trận đấu');
 
   const matchObj = {};
-  row.headers.forEach((h, i) => { matchObj[h] = row.data[i]; });
+  row.headers.forEach((h, i) => { matchObj[h] = serializeValue(row.data[i], h); });
 
   // Lấy thêm attendance + enrich với thông tin user
   const rawAttendance = getSheetData('MATCH_ATTENDANCE')
