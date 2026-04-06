@@ -156,9 +156,6 @@ function renderNextMatchCard(match, user) {
           <button class="vote-btn no" onclick="submitVote('${match.match_id}', 'NO')">
             ❌ Không tham gia
           </button>
-          <button class="vote-btn maybe" onclick="submitVote('${match.match_id}', 'MAYBE')">
-            🤔 Có thể
-          </button>
         </div>
       </div>
 
@@ -203,7 +200,7 @@ async function loadVoteForMatch(matchId, userId) {
     if (voteRes.success && voteRes.vote) {
       const currentVote = voteRes.vote.vote_status;
       document.querySelectorAll(`#vote-section-${matchId} .vote-btn`).forEach(btn => {
-        const btnVote = btn.classList.contains('yes') ? 'YES' : btn.classList.contains('no') ? 'NO' : 'MAYBE';
+        const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
         btn.classList.toggle('active', btnVote === currentVote);
       });
     }
@@ -215,8 +212,6 @@ async function loadVoteForMatch(matchId, userId) {
       if (summaryEl) {
         summaryEl.innerHTML = `
           <span class="text-green-400">✅ ${s.yes}</span>
-          <span class="mx-1">·</span>
-          <span class="text-amber-400">🤔 ${s.maybe}</span>
           <span class="mx-1">·</span>
           <span class="text-red-400">❌ ${s.no}</span>
           <span class="text-gray-500 ml-1">người vote</span>
@@ -234,7 +229,7 @@ async function submitVote(matchId, voteStatus) {
       showToast(res.message, 'success');
       // Update button states
       document.querySelectorAll(`#vote-section-${matchId} .vote-btn`).forEach(btn => {
-        const btnVote = btn.classList.contains('yes') ? 'YES' : btn.classList.contains('no') ? 'NO' : 'MAYBE';
+        const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
         btn.classList.toggle('active', btnVote === voteStatus);
       });
       // Refresh summary
