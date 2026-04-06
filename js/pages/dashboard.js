@@ -28,6 +28,9 @@ async function renderDashboard(container) {
   container.innerHTML = `
     <div class="space-y-6">
 
+      <!-- Notifications (loaded async) -->
+      <div id="notifications-section"></div>
+
       <!-- Header -->
       <div class="flex items-center justify-between">
         <div>
@@ -111,6 +114,91 @@ async function renderDashboard(container) {
   if (nextMatch) {
     loadVoteForMatch(nextMatch.match_id, user.user_id);
   }
+
+  // Load notifications async (không block render)
+  if (upcoming.length > 0) {
+    loadDashboardNotifications(upcoming, user);
+  }
+}
+
+// ---- Notifications ----
+
+async function loadDashboardNotifications(upcoming, user) {
+  try {
+    // Kiểm tra vote status cho TẤT CẢ upcoming matches + formation của trận gần nhất
+    const [voteResults, teamsRes] = await Promise.all([
+      Promise.all(upcoming.map(m =>
+        API.getMyVote(m.match_id)
+          .then(r => ({ matchId: m.match_id, vote: r.success ? r.vote : null }))
+          .catch(() => ({ matchId: m.match_id, vote: null }))
+      )),
+      API.getTeams(upcoming[0].match_id).catch(() => ({ success: false }))
+    ]);
+
+    const notifications = [];
+
+    // Thông báo chưa vote
+    upcoming.forEach((m, i) => {
+      const { vote } = voteResults[i];
+      if (!vote) {
+        notifications.push({
+          type: 'vote',
+          matchId: m.match_id,
+          title: 'Chưa xác nhận tham gia',
+          body: `${m.venue_name} · ${formatDate(m.match_date)} ${formatTime(m.start_time)}`,
+          action: `openMatchDetail('${m.match_id}')`,
+          actionLabel: 'Vote ngay',
+          color: 'amber'
+        });
+      }
+    });
+
+    // Thông báo đội hình đã sẵn sàng (chỉ trận gần nhất)
+    if (teamsRes.success && (teamsRes.teams?.length > 0)) {
+      const m = upcoming[0];
+      notifications.push({
+        type: 'formation',
+        matchId: m.match_id,
+        title: 'Đội hình đã được xếp',
+        body: `${m.venue_name} · ${formatDate(m.match_date)} — Admin đã xếp xong đội hình`,
+        action: `openFormationFromDash('${m.match_id}')`,
+        actionLabel: 'Xem đội hình',
+        color: 'green'
+      });
+    }
+
+    const section = document.getElementById('notifications-section');
+    if (!section || notifications.length === 0) return;
+
+    section.innerHTML = `
+      <div class="space-y-2">
+        ${notifications.map(n => `
+          <div class="flex items-start gap-3 rounded-xl px-4 py-3 border
+            ${n.color === 'amber'
+              ? 'bg-amber-900/20 border-amber-700/40'
+              : 'bg-green-900/20 border-green-700/40'}">
+            <span class="text-lg mt-0.5">${n.color === 'amber' ? '🔔' : '👥'}</span>
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-sm ${n.color === 'amber' ? 'text-amber-300' : 'text-green-300'}">${n.title}</p>
+              <p class="text-gray-400 text-xs mt-0.5 truncate">${n.body}</p>
+            </div>
+            <button onclick="${n.action}"
+              class="text-xs font-semibold px-3 py-1.5 rounded-lg flex-shrink-0
+                ${n.color === 'amber'
+                  ? 'bg-amber-500 hover:bg-amber-400 text-black'
+                  : 'bg-green-600 hover:bg-green-500 text-white'}">
+              ${n.actionLabel}
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (e) { /* silent */ }
+}
+
+function openFormationFromDash(matchId) {
+  window._formationMatchId = matchId;
+  navigateTo('formation', { match_id: matchId });
 }
 
 function dashStatCard(icon, value, label, colorClass) {
