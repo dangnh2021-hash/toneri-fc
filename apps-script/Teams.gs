@@ -419,14 +419,18 @@ function generateRoundRobinSchedule(data) {
 
   const sheet = getSheet('MATCH_RESULTS');
 
-  // Xóa kết quả cũ: nếu reset_all=true thì xóa hết, ngược lại chỉ xóa pending/live
-  const existing = getSheetData('MATCH_RESULTS').filter(r => r.match_id === match_id);
-  existing.forEach(r => {
-    if (reset_all || r.status === 'pending' || r.status === 'live') {
-      const row = findRowByValue('MATCH_RESULTS', 0, r.result_id);
-      if (row) sheet.deleteRow(row.rowNum);
+  // Xóa kết quả cũ: đọc 1 lần, xóa từ dưới lên để tránh lệch chỉ số hàng
+  const allResultData = sheet.getDataRange().getValues();
+  const rHeaders = allResultData[0];
+  const rMatchCol = rHeaders.indexOf('match_id');
+  const rStatusCol = rHeaders.indexOf('status');
+  for (let i = allResultData.length - 1; i >= 1; i--) {
+    if (String(allResultData[i][rMatchCol]) !== String(match_id)) continue;
+    const rowStatus = allResultData[i][rStatusCol];
+    if (reset_all || rowStatus === 'pending' || rowStatus === 'live') {
+      sheet.deleteRow(i + 1);
     }
-  });
+  }
 
   const teamIds = teams.map(t => t.team_id);
   const results = [];

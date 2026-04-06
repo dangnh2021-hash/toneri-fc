@@ -110,10 +110,17 @@ function renderLiveUI(container) {
       ${guestTeams.length > 0 ? `
         <div class="bg-gray-800 border border-amber-700/40 rounded-xl p-3 flex items-start gap-2">
           <i class="fas fa-shield-alt text-amber-400 mt-0.5 text-sm"></i>
-          <div>
+          <div class="flex-1">
             <span class="text-amber-400 text-xs font-semibold">Đội khách mời tham dự:</span>
             <span class="text-gray-300 text-xs ml-2">${guestTeams.map(g => g.team_name).join(', ')}</span>
-            <p class="text-gray-500 text-xs mt-0.5">Đội khách cần được thêm vào đội hình để xuất hiện trong lịch đấu.</p>
+            ${validResults.length === 0 || !guestTeams.some(g => teams.find(t => t.team_name === g.team_name)) ? `
+              <p class="text-gray-500 text-xs mt-1">
+                <i class="fas fa-info-circle mr-1"></i>Vào
+                <button onclick="navigateTo('formation', {match_id: '${liveState.matchId}'})"
+                  class="text-amber-400 underline">trang Đội hình</button>
+                → tạo lại lịch vòng tròn để đội khách xuất hiện trong kết quả.
+              </p>
+            ` : ''}
           </div>
         </div>
       ` : ''}
