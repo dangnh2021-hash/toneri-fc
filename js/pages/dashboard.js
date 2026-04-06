@@ -1,0 +1,250 @@
+// ============================================================
+// dashboard.js - Trang chủ: trận sắp tới + vote + stats
+// ============================================================
+
+async function renderDashboard(container) {
+  const user = getStoredUser();
+
+  // Load dữ liệu song song
+  showLoading(true);
+  let upcoming = [], leaderboard = [];
+  try {
+    const [upRes, lbRes] = await Promise.all([
+      API.getUpcomingMatches(),
+      API.getLeaderboard()
+    ]);
+    if (upRes.success) upcoming = upRes.matches || [];
+    if (lbRes.success) leaderboard = lbRes.leaderboard || [];
+  } catch (e) {
+    showToast('Lỗi tải dữ liệu', 'error');
+  } finally {
+    showLoading(false);
+  }
+
+  const nextMatch = upcoming[0] || null;
+  const myRank = leaderboard.findIndex(p => p.user_id === user.user_id) + 1;
+  const myStats = leaderboard.find(p => p.user_id === user.user_id) || user;
+
+  container.innerHTML = `
+    <div class="space-y-6">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-white">Xin chào, ${user.full_name || user.username}! 👋</h1>
+          <p class="text-gray-400 text-sm mt-0.5">Chào mừng đến với Toneri FC</p>
+        </div>
+        <div class="text-right hidden sm:block">
+          <div class="text-2xl font-bold text-amber-400">${myStats.rating_points || 1000}</div>
+          <div class="text-gray-400 text-xs">ELO Rating</div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        ${dashStatCard('🏅', myRank > 0 ? `#${myRank}` : '-', 'Xếp hạng', 'text-amber-400')}
+        ${dashStatCard('⚽', myStats.total_goals || 0, 'Bàn thắng', 'text-green-400')}
+        ${dashStatCard('🎯', myStats.total_matches || 0, 'Số trận', 'text-blue-400')}
+        ${dashStatCard('📈', `${myStats.win_rate || 0}%`, 'Tỉ lệ thắng', 'text-purple-400')}
+      </div>
+
+      <!-- Next Match -->
+      <div>
+        <h2 class="section-heading"><i class="fas fa-calendar-check text-green-400"></i> Trận tiếp theo</h2>
+        ${nextMatch ? renderNextMatchCard(nextMatch, user) : `
+          <div class="card ${emptyState('⚽', 'Chưa có lịch thi đấu', 'Admin sẽ thêm lịch sớm thôi!')}"></div>
+        `}
+      </div>
+
+      <!-- Upcoming (rest) -->
+      ${upcoming.length > 1 ? `
+        <div>
+          <h2 class="section-heading"><i class="fas fa-list text-blue-400"></i> Lịch sắp tới</h2>
+          <div class="space-y-3">
+            ${upcoming.slice(1, 4).map(m => renderUpcomingMatchRow(m)).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- Top 5 Leaderboard -->
+      ${leaderboard.length > 0 ? `
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="section-heading mb-0"><i class="fas fa-trophy text-amber-400"></i> Top cầu thủ</h2>
+            <a href="#leaderboard" onclick="navigateTo('leaderboard')" class="text-green-400 text-sm hover:underline">Xem tất cả →</a>
+          </div>
+          <div class="card p-0 overflow-hidden">
+            <div class="table-responsive">
+              <table>
+                <thead><tr>
+                  <th>#</th><th>Cầu thủ</th><th>Vị trí</th><th>OVR</th><th>ELO</th><th>W</th>
+                </tr></thead>
+                <tbody>
+                  ${leaderboard.slice(0, 5).map((p, i) => `
+                    <tr>
+                      <td class="font-bold ${i < 3 ? ['rank-1','rank-2','rank-3'][i] : 'text-gray-400'}">${i + 1}</td>
+                      <td>
+                        <div class="flex items-center gap-2">
+                          <div class="w-8 h-8 rounded-full bg-green-800 flex items-center justify-center text-xs font-bold text-white">
+                            ${(p.full_name || '?')[0]}
+                          </div>
+                          <span class="font-medium text-white">${p.full_name}</span>
+                          ${p.user_id === user.user_id ? '<span class="badge badge-yes text-xs">Bạn</span>' : ''}
+                        </div>
+                      </td>
+                      <td>${positionBadge(p.positions)}</td>
+                      <td class="font-bold" style="color:${overallColor(p.overall_rating)}">${p.overall_rating}</td>
+                      <td class="font-bold text-amber-400">${p.rating_points}</td>
+                      <td class="text-green-400">${p.total_wins || 0}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  // Load vote status for next match
+  if (nextMatch) {
+    loadVoteForMatch(nextMatch.match_id, user.user_id);
+  }
+}
+
+function dashStatCard(icon, value, label, colorClass) {
+  return `
+    <div class="card text-center">
+      <div class="text-2xl mb-1">${icon}</div>
+      <div class="text-xl font-bold ${colorClass}">${value}</div>
+      <div class="text-gray-400 text-xs">${label}</div>
+    </div>`;
+}
+
+function renderNextMatchCard(match, user) {
+  const matchDate = formatDate(match.match_date);
+  const startTime = formatTime(match.start_time);
+  const endTime = match.end_time ? ` - ${formatTime(match.end_time)}` : '';
+
+  return `
+    <div class="card border-green-800" id="next-match-card">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            ${matchStatusBadge(match.status)}
+            <span class="text-gray-400 text-sm">${match.match_format || '5v5'}</span>
+          </div>
+          <h3 class="text-white font-bold text-lg">${match.venue_name}</h3>
+          <p class="text-gray-400 text-sm">${match.venue_address || ''}</p>
+        </div>
+        <div class="text-right">
+          <div class="text-green-400 font-semibold">${matchDate}</div>
+          <div class="text-gray-300 text-sm">${startTime}${endTime}</div>
+        </div>
+      </div>
+
+      ${match.notes ? `<p class="text-gray-400 text-sm mb-4 italic">${match.notes}</p>` : ''}
+
+      <!-- Vote section -->
+      <div id="vote-section-${match.match_id}">
+        <p class="text-gray-400 text-sm mb-3">Bạn có tham gia trận này không?</p>
+        <div class="flex gap-2 flex-wrap">
+          <button class="vote-btn yes" onclick="submitVote('${match.match_id}', 'YES')">
+            ✅ Tham gia
+          </button>
+          <button class="vote-btn no" onclick="submitVote('${match.match_id}', 'NO')">
+            ❌ Không tham gia
+          </button>
+          <button class="vote-btn maybe" onclick="submitVote('${match.match_id}', 'MAYBE')">
+            🤔 Có thể
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between">
+        <div id="vote-summary-${match.match_id}" class="text-gray-400 text-sm">
+          <span class="animate-spin inline-block">⏳</span> Đang tải...
+        </div>
+        <a href="#matches" onclick="navigateTo('matches')" class="text-green-400 text-sm hover:underline">
+          Xem chi tiết →
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+function renderUpcomingMatchRow(match) {
+  return `
+    <div class="card py-3 px-4 flex items-center justify-between cursor-pointer hover:border-green-600"
+      onclick="navigateTo('matches')">
+      <div class="flex items-center gap-3">
+        <div class="text-center">
+          <div class="text-green-400 font-bold text-sm">${formatDateShort(match.match_date)}</div>
+          <div class="text-gray-500 text-xs">${formatTime(match.start_time)}</div>
+        </div>
+        <div>
+          <p class="text-white font-medium text-sm">${match.venue_name}</p>
+          <p class="text-gray-500 text-xs">${match.match_format || '5v5'}</p>
+        </div>
+      </div>
+      ${matchStatusBadge(match.status)}
+    </div>`;
+}
+
+async function loadVoteForMatch(matchId, userId) {
+  try {
+    const [voteRes, attRes] = await Promise.all([
+      API.getMyVote(matchId),
+      API.getAttendance(matchId)
+    ]);
+
+    // Update vote buttons
+    if (voteRes.success && voteRes.vote) {
+      const currentVote = voteRes.vote.vote_status;
+      document.querySelectorAll(`#vote-section-${matchId} .vote-btn`).forEach(btn => {
+        const btnVote = btn.classList.contains('yes') ? 'YES' : btn.classList.contains('no') ? 'NO' : 'MAYBE';
+        btn.classList.toggle('active', btnVote === currentVote);
+      });
+    }
+
+    // Update summary
+    if (attRes.success) {
+      const s = attRes.summary;
+      const summaryEl = document.getElementById(`vote-summary-${matchId}`);
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <span class="text-green-400">✅ ${s.yes}</span>
+          <span class="mx-1">·</span>
+          <span class="text-amber-400">🤔 ${s.maybe}</span>
+          <span class="mx-1">·</span>
+          <span class="text-red-400">❌ ${s.no}</span>
+          <span class="text-gray-500 ml-1">người vote</span>
+        `;
+      }
+    }
+  } catch (e) { /* silent */ }
+}
+
+async function submitVote(matchId, voteStatus) {
+  showLoading(true);
+  try {
+    const res = await API.vote(matchId, voteStatus);
+    if (res.success) {
+      showToast(res.message, 'success');
+      // Update button states
+      document.querySelectorAll(`#vote-section-${matchId} .vote-btn`).forEach(btn => {
+        const btnVote = btn.classList.contains('yes') ? 'YES' : btn.classList.contains('no') ? 'NO' : 'MAYBE';
+        btn.classList.toggle('active', btnVote === voteStatus);
+      });
+      // Refresh summary
+      loadVoteForMatch(matchId, getStoredUser().user_id);
+    } else {
+      showToast(res.error, 'error');
+    }
+  } catch (e) {
+    showToast('Lỗi kết nối', 'error');
+  } finally {
+    showLoading(false);
+  }
+}
