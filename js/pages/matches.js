@@ -241,11 +241,8 @@ async function submitVoteFromModal(matchId, voteStatus) {
     const res = await API.vote(matchId, voteStatus);
     if (res.success) {
       showToast(res.message, 'success');
-      // Update vote buttons in modal
-      document.querySelectorAll('.vote-btn').forEach(btn => {
-        const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
-        btn.classList.toggle('active', btnVote === voteStatus);
-      });
+      // Reload modal để cập nhật danh sách người tham gia
+      await openMatchDetail(matchId);
     } else {
       showToast(res.error, 'error');
     }

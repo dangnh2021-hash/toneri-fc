@@ -114,7 +114,7 @@ function getMatchDetail(data) {
     const u = userMap[a.user_id] || {};
     return {
       ...a,
-      full_name: u.full_name || 'Unknown',
+      full_name: u.full_name || u.username || 'Ẩn danh',
       positions: u.positions || '',
       overall_rating: u.overall_rating || 0
     };
@@ -192,7 +192,7 @@ function getAttendance(data) {
     const u = userMap[a.user_id] || {};
     return {
       ...a,
-      full_name: u.full_name || 'Unknown',
+      full_name: u.full_name || u.username || 'Ẩn danh',
       positions: u.positions || '',
       overall_rating: u.overall_rating || 0,
       rating_points: u.rating_points || 1000
