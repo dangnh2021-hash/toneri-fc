@@ -364,24 +364,62 @@ async function submitCreateMatch() {
 
 function openEditMatch(matchId, match) {
   openModal(`
-    <div class="p-6">
+    <div class="p-6 overflow-y-auto max-h-[85vh]">
       <div class="flex items-center justify-between mb-5">
         <h3 class="text-white font-bold text-lg">Chỉnh sửa trận đấu</h3>
         <button onclick="closeModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
       </div>
       <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-group mb-0">
+            <label class="form-label">Ngày thi đấu *</label>
+            <input type="date" id="edit-match-date" class="form-input" value="${match.match_date || ''}">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Trạng thái</label>
+            <select id="edit-match-status" class="form-select">
+              <option value="scheduled" ${match.status === 'scheduled' ? 'selected' : ''}>Sắp diễn ra</option>
+              <option value="ongoing" ${match.status === 'ongoing' ? 'selected' : ''}>Đang diễn ra</option>
+              <option value="completed" ${match.status === 'completed' ? 'selected' : ''}>Đã kết thúc</option>
+              <option value="cancelled" ${match.status === 'cancelled' ? 'selected' : ''}>Đã hủy</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-group mb-0">
+            <label class="form-label">Giờ bắt đầu *</label>
+            <input type="time" id="edit-match-start" class="form-input" value="${match.start_time || ''}">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Giờ kết thúc</label>
+            <input type="time" id="edit-match-end" class="form-input" value="${match.end_time || ''}">
+          </div>
+        </div>
         <div class="form-group mb-0">
-          <label class="form-label">Trạng thái</label>
-          <select id="edit-match-status" class="form-select">
-            <option value="scheduled" ${match.status === 'scheduled' ? 'selected' : ''}>Sắp diễn ra</option>
-            <option value="ongoing" ${match.status === 'ongoing' ? 'selected' : ''}>Đang diễn ra</option>
-            <option value="completed" ${match.status === 'completed' ? 'selected' : ''}>Đã kết thúc</option>
-            <option value="cancelled" ${match.status === 'cancelled' ? 'selected' : ''}>Đã hủy</option>
-          </select>
+          <label class="form-label">Sân thi đấu *</label>
+          <input type="text" id="edit-match-venue" class="form-input" value="${match.venue_name || ''}" placeholder="Tên sân">
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Địa chỉ</label>
+          <input type="text" id="edit-match-address" class="form-input" value="${match.venue_address || ''}" placeholder="Địa chỉ sân">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-group mb-0">
+            <label class="form-label">Số người/đội</label>
+            <input type="number" id="edit-match-ppt" class="form-input" value="${match.num_players_per_team || 5}" min="3" max="11">
+          </div>
+          <div class="form-group mb-0">
+            <label class="form-label">Số đội</label>
+            <input type="number" id="edit-match-teams" class="form-input" value="${match.num_teams || 2}" min="2" max="6">
+          </div>
+        </div>
+        <div class="form-group mb-0">
+          <label class="form-label">Deadline vote</label>
+          <input type="datetime-local" id="edit-match-deadline" class="form-input" value="${match.voting_deadline ? match.voting_deadline.replace(' ', 'T').substring(0, 16) : ''}">
         </div>
         <div class="form-group mb-0">
           <label class="form-label">Ghi chú</label>
-          <textarea id="edit-match-notes" class="form-input">${match.notes || ''}</textarea>
+          <textarea id="edit-match-notes" class="form-input" rows="2">${match.notes || ''}</textarea>
         </div>
         <button onclick="submitEditMatch('${matchId}')" class="btn btn-primary w-full justify-center">
           Lưu thay đổi
@@ -392,7 +430,18 @@ function openEditMatch(matchId, match) {
 }
 
 async function submitEditMatch(matchId) {
+  const numPPT = Number(document.getElementById('edit-match-ppt').value) || 5;
+  const numTeams = Number(document.getElementById('edit-match-teams').value) || 2;
   const updates = {
+    match_date: document.getElementById('edit-match-date').value,
+    start_time: document.getElementById('edit-match-start').value,
+    end_time: document.getElementById('edit-match-end').value,
+    venue_name: document.getElementById('edit-match-venue').value.trim(),
+    venue_address: document.getElementById('edit-match-address').value.trim(),
+    num_players_per_team: numPPT,
+    num_teams: numTeams,
+    match_format: `${numPPT}v${numPPT}`,
+    voting_deadline: document.getElementById('edit-match-deadline').value,
     status: document.getElementById('edit-match-status').value,
     notes: document.getElementById('edit-match-notes').value.trim()
   };
@@ -401,7 +450,7 @@ async function submitEditMatch(matchId) {
     const res = await API.updateMatch(matchId, updates);
     if (res.success) {
       closeModal();
-      showToast('Đã cập nhật', 'success');
+      showToast('Đã cập nhật trận đấu', 'success');
       renderMatches(document.getElementById('page-content'));
     } else { showToast(res.error, 'error'); }
   } catch (e) { showToast('Lỗi', 'error'); }
