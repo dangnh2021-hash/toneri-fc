@@ -18,9 +18,30 @@ function getSheetData(sheetName) {
     .filter(row => row[0] !== '' && row[0] !== null && row[0] !== undefined)
     .map(row => {
       const obj = {};
-      headers.forEach((h, i) => { obj[h] = row[i]; });
+      headers.forEach((h, i) => { obj[h] = serializeValue(row[i], h); });
       return obj;
     });
+}
+
+// Chuyển đổi giá trị từ Sheets sang JSON-safe string
+function serializeValue(val, header) {
+  if (val === null || val === undefined || val === '') return '';
+  if (val instanceof Date) {
+    // Cột thời gian (start_time, end_time) → "HH:MM"
+    const timeHeaders = ['start_time', 'end_time'];
+    if (timeHeaders.includes(header)) {
+      const h = val.getHours().toString().padStart(2, '0');
+      const m = val.getMinutes().toString().padStart(2, '0');
+      return `${h}:${m}`;
+    }
+    // Cột ngày (match_date) → "YYYY-MM-DD"
+    const dateHeaders = ['match_date', 'voting_deadline', 'created_at', 'voted_at', 'updated_at', 'last_login', 'token_expiry', 'started_at', 'ended_at'];
+    if (dateHeaders.includes(header)) {
+      return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+    }
+    return val.toISOString();
+  }
+  return val;
 }
 
 function findRowByValue(sheetName, colIndex, value) {

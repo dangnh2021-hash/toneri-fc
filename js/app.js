@@ -138,7 +138,29 @@ function formatDateShort(dateStr) {
 
 function formatTime(timeStr) {
   if (!timeStr) return '';
-  return String(timeStr).substring(0, 5);
+  const str = String(timeStr).trim();
+
+  // Đã đúng format HH:MM
+  if (/^\d{1,2}:\d{2}/.test(str)) return str.substring(0, 5);
+
+  // Google Sheets trả về Date serial dạng "1899-12-30T18:00:00.000Z"
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const h = d.getUTCHours().toString().padStart(2, '0');
+      const m = d.getUTCMinutes().toString().padStart(2, '0');
+      return `${h}:${m}`;
+    }
+  } catch {}
+
+  // Số thập phân (fraction of day, ví dụ 0.75 = 18:00)
+  const num = parseFloat(str);
+  if (!isNaN(num) && num >= 0 && num < 1) {
+    const totalMin = Math.round(num * 1440);
+    return `${Math.floor(totalMin / 60).toString().padStart(2, '0')}:${(totalMin % 60).toString().padStart(2, '0')}`;
+  }
+
+  return str.substring(0, 5);
 }
 
 function formatDateTime(isoStr) {
