@@ -9,7 +9,8 @@ let formationState = {
   suggestedTeams: null,
   attendance: [],
   results: [],
-  guestTeams: []
+  guestTeams: [],
+  isAdmin: false
 };
 
 async function renderFormation(container, params = {}) {
@@ -20,11 +21,7 @@ async function renderFormation(container, params = {}) {
   }
 
   formationState.matchId = matchId;
-  const user = getStoredUser();
-  if (!user.is_admin) {
-    container.innerHTML = `<div class="card">${emptyState('🔒', 'Chỉ admin mới có thể xem đội hình', 'Vui lòng liên hệ admin')}</div>`;
-    return;
-  }
+  formationState.isAdmin = getStoredUser().is_admin;
 
   showLoading(true);
   try {
@@ -53,7 +50,7 @@ async function renderFormation(container, params = {}) {
 }
 
 function renderFormationUI(container) {
-  const { match, teams, attendance } = formationState;
+  const { match, teams, attendance, isAdmin } = formationState;
   const yesPlayers = attendance.filter(a => a.vote_status === 'YES');
   const hasTeams = teams.length > 0;
 
@@ -71,15 +68,17 @@ function renderFormationUI(container) {
             <p class="text-gray-400 text-sm mt-0.5">${match?.venue_name || ''} · ${formatDate(match?.match_date)} · ${formatTime(match?.start_time)}</p>
           </div>
           <div class="flex gap-2 flex-wrap">
-            ${yesPlayers.length > 0 ? `
+            ${isAdmin && yesPlayers.length > 0 ? `
               <button onclick="runSuggestTeams()" class="btn btn-gold">
                 <i class="fas fa-magic"></i> Auto xếp đội
               </button>
             ` : ''}
-            ${hasTeams ? `
+            ${isAdmin && hasTeams ? `
               <button onclick="saveCurrentTeams()" class="btn btn-primary">
                 <i class="fas fa-save"></i> Lưu đội hình
               </button>
+            ` : ''}
+            ${hasTeams ? `
               <button onclick="openLiveMatch()" class="btn btn-live">
                 <i class="fas fa-circle" style="color:#ef4444;animation:pulse 1.5s infinite"></i> Live thi đấu
               </button>
@@ -88,19 +87,21 @@ function renderFormationUI(container) {
         </div>
       </div>
 
-      <!-- Step guide -->
-      <div class="bg-gray-800 border border-gray-700 rounded-xl p-4">
-        <p class="text-gray-300 text-sm font-semibold mb-2">📋 Hướng dẫn:</p>
-        <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
-          <span class="${hasTeams ? 'text-green-400' : ''}">
-            ${hasTeams ? '✅' : '①'} Xem đội hình bên dưới
-          </span>
-          <span>② <strong class="text-amber-300">Kéo thả</strong> card cầu thủ giữa các cột để đổi đội</span>
-          <span>③ Nhấn <strong class="text-white/80 cursor-pointer">tên đội</strong> để đổi tên</span>
-          <span>④ Nhấn <strong class="text-green-400">Lưu đội hình</strong> sau khi điều chỉnh xong</span>
-          <span>⑤ Nhấn <strong class="text-red-400">Live thi đấu</strong> để ghi tỉ số trực tiếp</span>
+      <!-- Step guide (admin only) -->
+      ${isAdmin ? `
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-4">
+          <p class="text-gray-300 text-sm font-semibold mb-2">📋 Hướng dẫn:</p>
+          <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
+            <span class="${hasTeams ? 'text-green-400' : ''}">
+              ${hasTeams ? '✅' : '①'} Xem đội hình bên dưới
+            </span>
+            <span>② <strong class="text-amber-300">Kéo thả</strong> card cầu thủ giữa các cột để đổi đội</span>
+            <span>③ Nhấn <strong class="text-white/80 cursor-pointer">tên đội</strong> để đổi tên</span>
+            <span>④ Nhấn <strong class="text-green-400">Lưu đội hình</strong> sau khi điều chỉnh xong</span>
+            <span>⑤ Nhấn <strong class="text-red-400">Live thi đấu</strong> để ghi tỉ số trực tiếp</span>
+          </div>
         </div>
-      </div>
+      ` : ''}
 
       <!-- Attendance - chỉ YES và NO -->
       <div class="card py-3 px-4">
@@ -119,7 +120,7 @@ function renderFormationUI(container) {
       <div id="teams-container">
         ${hasTeams
           ? renderTeamsGrid(teams)
-          : yesPlayers.length > 0
+          : isAdmin && yesPlayers.length > 0
             ? `<div class="card text-center py-10">
                 <div class="text-5xl mb-3">⚙️</div>
                 <p class="text-white font-semibold text-lg">Chưa có đội hình</p>
@@ -128,7 +129,7 @@ function renderFormationUI(container) {
                   <i class="fas fa-magic mr-2"></i> Auto xếp đội ngay
                 </button>
               </div>`
-            : `<div class="card">${emptyState('👥', 'Chưa có ai vote tham gia', 'Chờ thành viên vote YES để xếp đội')}</div>`
+            : `<div class="card">${emptyState('👥', 'Chưa có đội hình', isAdmin ? 'Cần ít nhất 1 người vote YES để xếp đội' : 'Admin chưa xếp đội hình')}</div>`
         }
       </div>
 
@@ -137,7 +138,7 @@ function renderFormationUI(container) {
     </div>
   `;
 
-  if (hasTeams) {
+  if (hasTeams && formationState.isAdmin) {
     initSortable();
   }
 }
@@ -145,13 +146,16 @@ function renderFormationUI(container) {
 // ---- Guest Teams ----
 
 function renderGuestSection() {
-  const { matchId, guestTeams } = formationState;
+  const { matchId, guestTeams, isAdmin } = formationState;
+  if (!isAdmin && guestTeams.length === 0) return '';
   return `
     <div class="flex items-center justify-between mb-2">
       <h2 class="section-heading mb-0"><i class="fas fa-shield-alt text-gray-400"></i> Đội khách mời</h2>
-      <button onclick="openAddGuestModal('${matchId}')" class="btn btn-secondary btn-sm">
-        <i class="fas fa-plus mr-1"></i> Thêm đội khách
-      </button>
+      ${isAdmin ? `
+        <button onclick="openAddGuestModal('${matchId}')" class="btn btn-secondary btn-sm">
+          <i class="fas fa-plus mr-1"></i> Thêm đội khách
+        </button>
+      ` : ''}
     </div>
     <div id="guest-teams-list" class="flex gap-2 flex-wrap min-h-[2rem]">
       ${guestTeams.length > 0
@@ -162,9 +166,11 @@ function renderGuestSection() {
                 <span class="text-white text-sm font-medium">${g.team_name}</span>
                 ${g.representative_name ? `<span class="text-gray-400 text-xs ml-1">(${g.representative_name})</span>` : ''}
               </div>
-              <button onclick="removeGuestTeam('${g.guest_team_id}')" class="text-red-400 hover:text-red-300 text-xs ml-1">
-                <i class="fas fa-times"></i>
-              </button>
+              ${isAdmin ? `
+                <button onclick="removeGuestTeam('${g.guest_team_id}')" class="text-red-400 hover:text-red-300 text-xs ml-1">
+                  <i class="fas fa-times"></i>
+                </button>
+              ` : ''}
             </div>
           `).join('')
         : '<p class="text-gray-500 text-xs py-1">Chưa có đội khách</p>'
@@ -200,10 +206,12 @@ function renderTeamsGrid(teams) {
           ${teams.map(t => `<span style="color:${t.team_color}">${t.team_name}: avg ${calcAvgRating(t.players)}</span>`).join(' · ')}
         </div>
       </div>
-      <div class="bg-blue-900/30 border border-blue-800 rounded-xl px-4 py-2 mb-3 text-xs text-blue-300 flex items-center gap-2">
-        <i class="fas fa-hand-pointer text-blue-400"></i>
-        <span><strong>Kéo thả</strong> card cầu thủ để đổi đội · Nhấn <strong>tên đội</strong> để đổi tên · Rating trung bình tự cập nhật</span>
-      </div>
+      ${formationState.isAdmin ? `
+        <div class="bg-blue-900/30 border border-blue-800 rounded-xl px-4 py-2 mb-3 text-xs text-blue-300 flex items-center gap-2">
+          <i class="fas fa-hand-pointer text-blue-400"></i>
+          <span><strong>Kéo thả</strong> card cầu thủ để đổi đội · Nhấn <strong>tên đội</strong> để đổi tên · Rating trung bình tự cập nhật</span>
+        </div>
+      ` : ''}
       <div class="grid grid-cols-1 ${gridCols} gap-4">
         ${teams.map((team, i) => renderTeamColumn(team, i)).join('')}
       </div>
@@ -243,15 +251,15 @@ function renderTeamColumn(team, idx) {
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="w-4 h-4 rounded-full flex-shrink-0" style="background:${team.team_color}"></div>
-            <span id="team-name-${idx}" style="color:${team.team_color}" class="cursor-pointer hover:opacity-80 font-bold"
-              onclick="startEditTeamName(${idx})"
-              title="Nhấn để đổi tên">${team.team_name}</span>
-            <i class="fas fa-pencil-alt text-xs opacity-30 cursor-pointer" onclick="startEditTeamName(${idx})"></i>
+            <span id="team-name-${idx}" style="color:${team.team_color}" class="${formationState.isAdmin ? 'cursor-pointer hover:opacity-80' : ''} font-bold"
+              ${formationState.isAdmin ? `onclick="startEditTeamName(${idx})" title="Nhấn để đổi tên"` : ''}
+              >${team.team_name}</span>
+            ${formationState.isAdmin ? `<i class="fas fa-pencil-alt text-xs opacity-30 cursor-pointer" onclick="startEditTeamName(${idx})"></i>` : ''}
           </div>
           <div class="text-gray-400 text-sm font-normal">OVR avg: <span style="color:${team.team_color}" class="font-bold">${avgRating}</span></div>
         </div>
       </div>
-      <div class="team-players-list sortable-list" data-team-idx="${idx}" id="team-list-${idx}">
+      <div class="team-players-list ${formationState.isAdmin ? 'sortable-list' : ''}" data-team-idx="${idx}" id="team-list-${idx}">
         ${(team.players || []).map(p => renderPlayerCard(p)).join('')}
         ${(team.players || []).length === 0 ? `<div class="text-center text-gray-600 text-xs py-4">Kéo cầu thủ vào đây</div>` : ''}
       </div>
@@ -438,36 +446,44 @@ async function saveCurrentTeams() {
 // ---- Results Section ----
 
 function renderResultsSection() {
-  const { teams, results } = formationState;
+  const { teams, results, isAdmin } = formationState;
   if (teams.length < 2) return '';
 
   const teamMap = {};
   teams.forEach(t => { teamMap[t.team_id] = t; });
 
-  // Nhóm kết quả theo lượt (round_number = số lượt)
+  // Chỉ hiển thị trận đã xong
+  const completedResults = results.filter(r => r.status === 'completed');
+  const pendingCount = results.filter(r => r.status !== 'completed').length;
+
+  // Nhóm completed theo lượt
   const legs = {};
-  results.forEach(r => {
+  completedResults.forEach(r => {
     const leg = r.round_number || 1;
     if (!legs[leg]) legs[leg] = [];
     legs[leg].push(r);
   });
   const legKeys = Object.keys(legs).map(Number).sort((a, b) => a - b);
 
-  const hasResults = results.length > 0;
-  const completedCount = results.filter(r => r.status === 'completed').length;
-
   return `
     <div>
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="section-heading mb-0"><i class="fas fa-futbol text-green-400"></i> Kết quả vòng tròn
-          ${hasResults ? `<span class="text-sm font-normal text-gray-400 ml-2">(${completedCount}/${results.length} trận xong)</span>` : ''}
+          ${results.length > 0 ? `<span class="text-sm font-normal text-gray-400 ml-2">(${completedResults.length}/${results.length} trận xong)</span>` : ''}
         </h2>
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-gray-400 text-xs">Tạo lịch:</span>
-          <button onclick="confirmGenerateSchedule(1)" class="btn btn-secondary btn-sm">1 lượt</button>
-          <button onclick="confirmGenerateSchedule(2)" class="btn btn-secondary btn-sm">2 lượt</button>
-          <button onclick="confirmGenerateSchedule(3)" class="btn btn-secondary btn-sm">3 lượt</button>
-        </div>
+        ${isAdmin ? `
+          <div class="flex items-center gap-2 flex-wrap">
+            ${pendingCount > 0 ? `
+              <button onclick="resetPendingResults()" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash mr-1"></i> Xóa ${pendingCount} trận chưa đấu
+              </button>
+            ` : ''}
+            <span class="text-gray-400 text-xs">Tạo lịch:</span>
+            <button onclick="confirmGenerateSchedule(1)" class="btn btn-secondary btn-sm">1 lượt</button>
+            <button onclick="confirmGenerateSchedule(2)" class="btn btn-secondary btn-sm">2 lượt</button>
+            <button onclick="confirmGenerateSchedule(3)" class="btn btn-secondary btn-sm">3 lượt</button>
+          </div>
+        ` : ''}
       </div>
 
       <!-- Giải thích khi chỉ có 2 đội -->
@@ -478,11 +494,11 @@ function renderResultsSection() {
         </div>
       ` : ''}
 
-      ${!hasResults
+      ${completedResults.length === 0
         ? `<div class="card text-center py-8">
-            <div class="text-4xl mb-3">📅</div>
-            <p class="text-white font-semibold">Chưa có lịch thi đấu</p>
-            <p class="text-gray-400 text-sm mt-1">Nhấn "1 lượt", "2 lượt" hoặc "3 lượt" để tạo vòng tròn</p>
+            <div class="text-4xl mb-3">${results.length > 0 ? '⏳' : '📅'}</div>
+            <p class="text-white font-semibold">${results.length > 0 ? 'Chưa có trận nào kết thúc' : 'Chưa có lịch thi đấu'}</p>
+            <p class="text-gray-400 text-sm mt-1">${results.length > 0 ? 'Bắt đầu thi đấu trong trang Live' : (isAdmin ? 'Nhấn "1 lượt" ... để tạo vòng tròn' : '')}</p>
           </div>`
         : legKeys.map(leg => `
             <div class="mb-4">
@@ -490,10 +506,10 @@ function renderResultsSection() {
                 <span class="text-amber-400 font-semibold text-sm">
                   ${leg === 1 ? '🏃 Lượt đi' : leg === 2 ? '🔄 Lượt về' : `🔁 Lượt ${leg}`}
                 </span>
-                <span class="text-gray-500 text-xs">(${legs[leg].filter(r => r.status === 'completed').length}/${legs[leg].length} xong)</span>
+                <span class="text-gray-500 text-xs">(${legs[leg].length} trận)</span>
               </div>
               <div class="space-y-2">
-                ${legs[leg].map(r => renderResultRow(r, teamMap)).join('')}
+                ${legs[leg].map(r => renderResultRow(r, teamMap, isAdmin)).join('')}
               </div>
             </div>
           `).join('')
@@ -513,10 +529,45 @@ async function refreshResultsSection() {
   } catch (e) {}
 }
 
-function renderResultRow(result, teamMap) {
+async function resetResult(resultId) {
+  const result = formationState.results.find(r => r.result_id === resultId);
+  if (!result) return;
+  showLoading(true);
+  try {
+    const res = await API.saveMatchResult({
+      match_id: result.match_id || formationState.matchId,
+      result_id: resultId,
+      team_home_id: result.team_home_id,
+      team_away_id: result.team_away_id,
+      score_home: 0,
+      score_away: 0,
+      status: 'pending'
+    });
+    if (res.success) {
+      showToast('Đã reset kết quả về chưa đấu', 'success');
+      refreshResultsSection();
+    } else { showToast(res.error, 'error'); }
+  } catch (e) { showToast('Lỗi', 'error'); }
+  finally { showLoading(false); }
+}
+
+async function resetPendingResults() {
+  const pendingCount = formationState.results.filter(r => r.status !== 'completed').length;
+  if (pendingCount === 0) return;
+  showLoading(true);
+  try {
+    const res = await API.deleteMatchResults(formationState.matchId, 'pending');
+    if (res.success) {
+      showToast(`Đã xóa ${res.deleted} trận chưa đấu`, 'success');
+      refreshResultsSection();
+    } else { showToast(res.error, 'error'); }
+  } catch (e) { showToast('Lỗi', 'error'); }
+  finally { showLoading(false); }
+}
+
+function renderResultRow(result, teamMap, isAdmin = false) {
   const home = teamMap[result.team_home_id] || {};
   const away = teamMap[result.team_away_id] || {};
-  const isCompleted = result.status === 'completed';
 
   return `
     <div class="card py-3 px-4">
@@ -524,44 +575,21 @@ function renderResultRow(result, teamMap) {
         <div class="flex-1 text-right">
           <span class="font-semibold text-sm" style="color:${home.team_color || '#fff'}">${home.team_name || 'Đội 1'}</span>
         </div>
-
-        ${isCompleted
-          ? `<div class="text-white font-bold text-xl mx-3 min-w-[70px] text-center">
-              ${result.score_home} - ${result.score_away}
-            </div>`
-          : `<div class="flex items-center gap-2 mx-2">
-              <input type="number" min="0" max="20" value="${result.score_home || 0}"
-                id="score-home-${result.result_id}" class="score-input" />
-              <span class="text-gray-400 font-bold">-</span>
-              <input type="number" min="0" max="20" value="${result.score_away || 0}"
-                id="score-away-${result.result_id}" class="score-input" />
-            </div>`
-        }
-
+        <div class="text-white font-bold text-xl mx-3 min-w-[70px] text-center">
+          ${result.score_home} - ${result.score_away}
+        </div>
         <div class="flex-1">
           <span class="font-semibold text-sm" style="color:${away.team_color || '#fff'}">${away.team_name || 'Đội 2'}</span>
         </div>
-
-        ${isCompleted
-          ? `<span class="badge badge-completed text-xs">✅</span>`
-          : `<button onclick="submitResult('${result.result_id}', '${result.match_id || formationState.matchId}', '${result.team_home_id}', '${result.team_away_id}')"
-              class="btn btn-primary btn-sm flex-shrink-0">
-              <i class="fas fa-check"></i>
+        ${isAdmin
+          ? `<button onclick="resetResult('${result.result_id}')" class="btn btn-secondary btn-sm flex-shrink-0" title="Reset về chưa đấu">
+              <i class="fas fa-undo text-xs"></i>
             </button>`
+          : `<span class="badge badge-completed text-xs">✅</span>`
         }
       </div>
-
-      <!-- Scorers row -->
-      ${isCompleted ? `
-        <div class="mt-2 pt-2 border-t border-gray-700 flex items-center justify-between">
-          <div class="text-gray-500 text-xs flex-1">
-            ${result.scorers_summary || ''}
-          </div>
-          <button onclick="openScorerModal('${result.result_id}', '${result.match_id || formationState.matchId}', '${result.team_home_id}', '${result.team_away_id}')"
-            class="btn btn-secondary btn-sm text-xs">
-            <i class="fas fa-medal mr-1"></i> Ghi bàn
-          </button>
-        </div>
+      ${result.scorers_summary ? `
+        <div class="mt-2 pt-2 border-t border-gray-700 text-gray-500 text-xs">${result.scorers_summary}</div>
       ` : ''}
     </div>
   `;

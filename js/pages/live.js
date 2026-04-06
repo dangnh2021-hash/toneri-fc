@@ -8,7 +8,8 @@ let liveState = {
   teams: [],
   guestTeams: [],
   results: [],
-  localScores: {}   // resultId -> { home, away, events: [{time, side, name}] }
+  localScores: {},  // resultId -> { home, away, events: [{time, side, name}] }
+  isAdmin: false
 };
 
 async function renderLiveMatch(container, params = {}) {
@@ -19,6 +20,7 @@ async function renderLiveMatch(container, params = {}) {
   }
 
   liveState.matchId = matchId;
+  liveState.isAdmin = getStoredUser().is_admin;
 
   showLoading(true);
   try {
@@ -56,7 +58,7 @@ async function renderLiveMatch(container, params = {}) {
 }
 
 function renderLiveUI(container) {
-  const { match, teams, guestTeams, results } = liveState;
+  const { match, teams, guestTeams, results, isAdmin } = liveState;
 
   // Build teamMap từ cả internal teams và guest teams
   const teamMap = {};
@@ -100,6 +102,11 @@ function renderLiveUI(container) {
           <button onclick="reloadLiveData()" class="btn btn-secondary btn-sm">
             <i class="fas fa-sync"></i> Tải lại
           </button>
+          ${isAdmin ? `
+            <button onclick="openAddMatchModal()" class="btn btn-secondary btn-sm">
+              <i class="fas fa-plus mr-1"></i> Thêm trận
+            </button>
+          ` : ''}
           ${pendingCount === 0 && validResults.length > 0 ? `
             <span class="badge badge-completed text-sm px-3 py-1">✅ Tất cả đã xong</span>
           ` : ''}
@@ -157,7 +164,7 @@ function renderLiveUI(container) {
                 <span class="text-gray-500 text-xs">(${doneCount}/${legMatches.length} xong)</span>
               </div>
               <div class="space-y-3">
-                ${legMatches.map(r => renderLiveResultCard(r, teamMap)).join('')}
+                ${legMatches.map(r => renderLiveResultCard(r, teamMap, isAdmin)).join('')}
               </div>
             </div>
           `;
@@ -172,11 +179,12 @@ function renderLiveUI(container) {
   `;
 }
 
-function renderLiveResultCard(result, teamMap) {
+function renderLiveResultCard(result, teamMap, isAdmin = false) {
   const home = teamMap[result.team_home_id] || {};
   const away = teamMap[result.team_away_id] || {};
   const score = liveState.localScores[result.result_id] || { home: 0, away: 0, events: [], saved: false };
   const isDone = score.saved || result.status === 'completed';
+  const showControls = isAdmin && !isDone;
 
   return `
     <div class="live-match-card ${isDone ? 'opacity-75' : ''}" id="live-card-${result.result_id}">
@@ -190,7 +198,7 @@ function renderLiveResultCard(result, teamMap) {
 
         <!-- Score + controls -->
         <div class="flex items-center gap-2">
-          ${isDone
+          ${!showControls
             ? `<div class="live-score-display">${score.home} - ${score.away}</div>`
             : `
               <div class="flex flex-col items-center gap-1">
@@ -244,7 +252,7 @@ function renderLiveResultCard(result, teamMap) {
       ` : ''}
 
       <!-- Actions -->
-      ${!isDone ? `
+      ${showControls ? `
         <div class="px-4 pb-3 flex items-center justify-between">
           <span class="text-gray-500 text-xs">
             ${score.events.length > 0 ? `${score.events.length} sự kiện` : 'Chưa có bàn thắng'}
@@ -254,14 +262,16 @@ function renderLiveResultCard(result, teamMap) {
             <i class="fas fa-flag-checkered mr-1"></i> Xong trận này
           </button>
         </div>
-      ` : `
+      ` : isDone ? `
         <div class="px-4 pb-3 text-center">
           <span class="text-green-400 text-xs font-semibold">✅ Kết thúc · ${score.home} - ${score.away}</span>
-          <button onclick="reopenMatch('${result.result_id}')" class="text-gray-500 hover:text-amber-400 text-xs ml-3">
-            <i class="fas fa-undo mr-1"></i>Sửa
-          </button>
+          ${isAdmin ? `
+            <button onclick="reopenMatch('${result.result_id}')" class="text-gray-500 hover:text-amber-400 text-xs ml-3">
+              <i class="fas fa-undo mr-1"></i>Sửa
+            </button>
+          ` : ''}
         </div>
-      `}
+      ` : ''}
     </div>
   `;
 }
@@ -355,7 +365,7 @@ function refreshLiveCard(resultId) {
   liveState.teams.forEach(t => { teamMap[t.team_id] = t; });
   const card = document.getElementById(`live-card-${resultId}`);
   if (card) {
-    card.outerHTML = renderLiveResultCard(result, teamMap);
+    card.outerHTML = renderLiveResultCard(result, teamMap, liveState.isAdmin);
   }
 }
 
@@ -408,7 +418,7 @@ function reopenMatch(resultId) {
   const teamMap = {};
   liveState.teams.forEach(t => { teamMap[t.team_id] = t; });
   const card = document.getElementById(`live-card-${resultId}`);
-  if (card) card.outerHTML = renderLiveResultCard(r, teamMap);
+  if (card) card.outerHTML = renderLiveResultCard(r, teamMap, liveState.isAdmin);
 }
 
 async function reloadLiveData() {
@@ -437,5 +447,68 @@ async function reloadLiveData() {
     renderLiveUI(document.getElementById('page-content'));
     showToast('Đã tải lại dữ liệu', 'success');
   } catch(e) { showToast('Lỗi', 'error'); }
+  finally { showLoading(false); }
+}
+
+// ---- Thêm trận đấu (admin) ----
+
+function openAddMatchModal() {
+  const { teams } = liveState;
+  if (teams.length < 2) { showToast('Cần ít nhất 2 đội', 'warning'); return; }
+
+  const existingLegs = [...new Set(liveState.results.map(r => Number(r.round_number) || 1))];
+  const maxLeg = existingLegs.length > 0 ? Math.max(...existingLegs) : 1;
+
+  const teamOptions = teams.map(t =>
+    `<option value="${t.team_id}">${t.team_name}</option>`
+  ).join('');
+  const legOptions = [1, 2, 3].map(l =>
+    `<option value="${l}" ${l === maxLeg ? 'selected' : ''}>${l === 1 ? 'Lượt đi' : l === 2 ? 'Lượt về' : `Lượt ${l}`}</option>`
+  ).join('');
+
+  openModal(`
+    <div class="p-6 space-y-4">
+      <h3 class="text-white font-bold text-lg"><i class="fas fa-plus-circle text-green-400 mr-2"></i>Thêm trận đấu</h3>
+      <div>
+        <label class="text-gray-400 text-sm block mb-1">Đội nhà</label>
+        <select id="add-match-home" class="input-field w-full">${teamOptions}</select>
+      </div>
+      <div>
+        <label class="text-gray-400 text-sm block mb-1">Đội khách</label>
+        <select id="add-match-away" class="input-field w-full">${teamOptions}</select>
+      </div>
+      <div>
+        <label class="text-gray-400 text-sm block mb-1">Lượt</label>
+        <select id="add-match-leg" class="input-field w-full">${legOptions}</select>
+      </div>
+      <div class="flex gap-3 justify-end pt-2">
+        <button onclick="closeModal()" class="btn btn-secondary">Hủy</button>
+        <button onclick="submitAddMatch()" class="btn btn-primary">Thêm trận</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitAddMatch() {
+  const homeId = document.getElementById('add-match-home').value;
+  const awayId = document.getElementById('add-match-away').value;
+  const leg = Number(document.getElementById('add-match-leg').value);
+
+  if (homeId === awayId) { showToast('Hai đội phải khác nhau', 'warning'); return; }
+
+  closeModal();
+  showLoading(true);
+  try {
+    const res = await API.addMatchResult({
+      match_id: liveState.matchId,
+      team_home_id: homeId,
+      team_away_id: awayId,
+      round_number: leg
+    });
+    if (res.success) {
+      showToast('Đã thêm trận đấu', 'success');
+      reloadLiveData();
+    } else { showToast(res.error, 'error'); }
+  } catch (e) { showToast('Lỗi', 'error'); }
   finally { showLoading(false); }
 }

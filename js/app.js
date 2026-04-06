@@ -70,8 +70,8 @@ function confirmDialog(message, onConfirm) {
 const PAGES = {
   dashboard:   { render: renderDashboard,   title: 'Dashboard' },
   matches:     { render: renderMatches,     title: 'Lịch thi đấu' },
-  formation:   { render: renderFormation,   title: 'Đội hình', requireAdmin: true },
-  live:        { render: renderLiveMatch,   title: 'Live thi đấu', requireAdmin: true },
+  formation:   { render: renderFormation,   title: 'Đội hình' },
+  live:        { render: renderLiveMatch,   title: 'Live thi đấu' },
   leaderboard: { render: renderLeaderboard, title: 'Bảng xếp hạng' },
   profile:     { render: renderProfile,     title: 'Hồ sơ' },
   admin:       { render: renderAdmin,       title: 'Admin', requireAdmin: true }

@@ -58,6 +58,8 @@ function doPost(e) {
       case 'saveMatchResult': result = saveMatchResult(data); break;
       case 'getResults':      result = getResults(data); break;
       case 'generateSchedule': result = generateRoundRobinSchedule(data); break;
+      case 'addMatchResult':  result = addMatchResult(data); break;
+      case 'deleteMatchResults': result = deleteMatchResults(data); break;
 
       // ---- Ratings ----
       case 'getLeaderboard':  result = getLeaderboard(data); break;

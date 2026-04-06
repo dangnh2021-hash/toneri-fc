@@ -83,20 +83,15 @@ function renderMatchCard(match, user, isPast = false) {
             <i class="fas fa-check-circle"></i> Vote tham gia
           </button>
         ` : ''}
+        <button onclick="openFormation('${match.match_id}')" class="btn btn-secondary btn-sm">
+          <i class="fas fa-users"></i> ${user.is_admin && !isPast ? 'Xếp đội' : 'Xem đội hình'}
+        </button>
         ${user.is_admin && !isPast ? `
-          <button onclick="openFormation('${match.match_id}')" class="btn btn-gold btn-sm">
-            <i class="fas fa-users"></i> Xếp đội
-          </button>
           <button onclick="openEditMatch('${match.match_id}', ${JSON.stringify(match).replace(/"/g, '&quot;')})" class="btn btn-secondary btn-sm">
             <i class="fas fa-edit"></i>
           </button>
           <button onclick="confirmDeleteMatch('${match.match_id}')" class="btn btn-danger btn-sm">
             <i class="fas fa-trash"></i>
-          </button>
-        ` : ''}
-        ${user.is_admin && isPast ? `
-          <button onclick="openFormation('${match.match_id}')" class="btn btn-secondary btn-sm">
-            <i class="fas fa-eye"></i> Xem đội hình
           </button>
         ` : ''}
       </div>
@@ -117,7 +112,6 @@ async function openMatchDetail(matchId) {
 
     const myVote = attendance.find(a => a.user_id === user.user_id);
     const yesPlayers = attendance.filter(a => a.vote_status === 'YES');
-    const maybePlayers = attendance.filter(a => a.vote_status === 'MAYBE');
     const noPlayers = attendance.filter(a => a.vote_status === 'NO');
 
     openModal(`
@@ -174,8 +168,8 @@ async function openMatchDetail(matchId) {
             <div class="flex flex-wrap gap-2">
               ${yesPlayers.map(p => `
                 <div class="flex items-center gap-1.5 bg-gray-700 rounded-lg px-3 py-1.5">
-                  <div class="w-6 h-6 bg-green-700 rounded-full flex items-center justify-center text-xs font-bold">${(p.full_name || '?')[0]}</div>
-                  <span class="text-white text-sm">${p.full_name}</span>
+                  <div class="w-6 h-6 bg-green-700 rounded-full flex items-center justify-center text-xs font-bold">${(p.full_name || p.user_id || '?')[0]}</div>
+                  <span class="text-white text-sm">${p.full_name || p.user_id || 'Unknown'}</span>
                   ${positionBadge(p.positions)}
                 </div>
               `).join('')}
