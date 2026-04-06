@@ -70,6 +70,7 @@ function confirmDialog(message, onConfirm) {
 const PAGES = {
   dashboard:   { render: renderDashboard,   title: 'Dashboard' },
   matches:     { render: renderMatches,     title: 'Lịch thi đấu' },
+  history:     { render: renderHistory,     title: 'Lịch sử' },
   formation:   { render: renderFormation,   title: 'Đội hình' },
   live:        { render: renderLiveMatch,   title: 'Live thi đấu' },
   leaderboard: { render: renderLeaderboard, title: 'Bảng xếp hạng' },

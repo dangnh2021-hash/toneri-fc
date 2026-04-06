@@ -457,11 +457,14 @@ async function saveCurrentTeams() {
 // ---- Results Section ----
 
 function renderResultsSection() {
-  const { teams, results, isAdmin } = formationState;
+  const { teams, results, isAdmin, guestTeams } = formationState;
   if (teams.length < 2) return '';
 
   const teamMap = {};
   teams.forEach(t => { teamMap[t.team_id] = t; });
+  guestTeams.forEach(g => {
+    teamMap[g.guest_team_id] = { team_id: g.guest_team_id, team_name: g.team_name, team_color: '#9CA3AF' };
+  });
 
   const completedResults = results.filter(r => r.status === 'completed');
   const pendingCount = results.filter(r => r.status !== 'completed').length;
