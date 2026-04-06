@@ -63,6 +63,9 @@ function renderLiveUI(container) {
   // Build teamMap từ cả internal teams và guest teams
   const teamMap = {};
   teams.forEach(t => { teamMap[t.team_id] = t; });
+  guestTeams.forEach(g => {
+    teamMap[g.guest_team_id] = { team_id: g.guest_team_id, team_name: g.team_name, team_color: '#9CA3AF' };
+  });
 
   // Nhóm theo lượt — lọc bỏ result có team_id không hợp lệ
   const validResults = results.filter(r =>
@@ -453,13 +456,17 @@ async function reloadLiveData() {
 // ---- Thêm trận đấu (admin) ----
 
 function openAddMatchModal() {
-  const { teams } = liveState;
-  if (teams.length < 2) { showToast('Cần ít nhất 2 đội', 'warning'); return; }
+  const { teams, guestTeams } = liveState;
+  const allTeams = [
+    ...teams,
+    ...guestTeams.map(g => ({ team_id: g.guest_team_id, team_name: g.team_name + ' (Khách)' }))
+  ];
+  if (allTeams.length < 2) { showToast('Cần ít nhất 2 đội', 'warning'); return; }
 
   const existingLegs = [...new Set(liveState.results.map(r => Number(r.round_number) || 1))];
   const maxLeg = existingLegs.length > 0 ? Math.max(...existingLegs) : 1;
 
-  const teamOptions = teams.map(t =>
+  const teamOptions = allTeams.map(t =>
     `<option value="${t.team_id}">${t.team_name}</option>`
   ).join('');
   const legOptions = [1, 2, 3].map(l =>

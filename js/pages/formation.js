@@ -296,6 +296,9 @@ function saveTeamName(idx, newName) {
     el.outerHTML = `<span id="team-name-${idx}" style="color:${color}" class="cursor-pointer hover:opacity-80 font-bold"
       onclick="startEditTeamName(${idx})" title="Nhấn để đổi tên">${name}</span>`;
   }
+  // Cập nhật lại results section để hiển thị tên mới
+  const section = document.getElementById('results-section');
+  if (section) section.innerHTML = renderResultsSection();
 }
 
 function renderPlayerCard(player) {
