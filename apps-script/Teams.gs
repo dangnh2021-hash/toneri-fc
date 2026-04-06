@@ -459,3 +459,40 @@ function generateRoundRobinSchedule(data) {
   const legLabel = numRounds === 1 ? '1 lượt' : `${numRounds} lượt`;
   return success({ message: `Đã tạo ${results.length} trận (${legLabel})`, schedule: results });
 }
+
+function addMatchResult(data) {
+  requireAdmin(data);
+  const { match_id, team_home_id, team_away_id, round_number } = data;
+  if (!match_id || !team_home_id || !team_away_id) return error('Thiếu thông tin');
+  if (team_home_id === team_away_id) return error('Hai đội phải khác nhau');
+
+  const resultId = generateId('RES');
+  getSheet('MATCH_RESULTS').appendRow([
+    resultId, match_id, Number(round_number) || 1,
+    team_home_id, team_away_id, 0, 0, 'pending', '', '', ''
+  ]);
+  return success({ result_id: resultId, message: 'Đã thêm trận đấu' });
+}
+
+function deleteMatchResults(data) {
+  requireAdmin(data);
+  const { match_id, status_filter } = data;
+  if (!match_id) return error('Thiếu match_id');
+
+  const sheet = getSheet('MATCH_RESULTS');
+  const allData = sheet.getDataRange().getValues();
+  const headers = allData[0];
+  const matchIdCol = headers.indexOf('match_id');
+  const statusCol = headers.indexOf('status');
+
+  let deletedCount = 0;
+  for (let i = allData.length - 1; i >= 1; i--) {
+    if (String(allData[i][matchIdCol]) !== String(match_id)) continue;
+    const rowStatus = allData[i][statusCol];
+    if (!status_filter || rowStatus === status_filter) {
+      sheet.deleteRow(i + 1);
+      deletedCount++;
+    }
+  }
+  return success({ message: `Đã xóa ${deletedCount} kết quả`, deleted: deletedCount });
+}

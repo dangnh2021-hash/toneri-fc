@@ -145,6 +145,14 @@ const API = {
     return this.call('generateSchedule', { match_id: matchId });
   },
 
+  async addMatchResult(data) {
+    return this.call('addMatchResult', data);
+  },
+
+  async deleteMatchResults(matchId, statusFilter) {
+    return this.call('deleteMatchResults', { match_id: matchId, status_filter: statusFilter });
+  },
+
   // ---- Ratings ----
   async getLeaderboard() {
     return this.call('getLeaderboard');
