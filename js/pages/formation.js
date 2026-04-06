@@ -54,30 +54,47 @@ function renderFormationUI(container) {
   const hasTeams = teams.length > 0;
 
   container.innerHTML = `
-    <div class="space-y-6">
-      <!-- Header -->
-      <div class="flex items-start justify-between">
-        <div>
-          <button onclick="navigateTo('matches')" class="text-gray-400 hover:text-white text-sm mb-2 flex items-center gap-1">
-            <i class="fas fa-arrow-left"></i> Quay lại
-          </button>
-          <h1 class="text-2xl font-bold text-white">Đội hình thi đấu</h1>
-          <p class="text-gray-400 text-sm">${match?.venue_name || ''} · ${formatDate(match?.match_date)} · ${formatTime(match?.start_time)}</p>
+    <div class="space-y-5">
+
+      <!-- Back + Title -->
+      <div>
+        <button onclick="navigateTo('matches')" class="text-gray-400 hover:text-white text-sm mb-3 flex items-center gap-1">
+          <i class="fas fa-arrow-left"></i> Quay lại Lịch thi đấu
+        </button>
+        <div class="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-2xl font-bold text-white">⚽ Đội hình thi đấu</h1>
+            <p class="text-gray-400 text-sm mt-0.5">${match?.venue_name || ''} · ${formatDate(match?.match_date)} · ${formatTime(match?.start_time)}</p>
+          </div>
+          <!-- Action buttons -->
+          <div class="flex gap-2 flex-wrap">
+            ${yesPlayers.length > 0 ? `
+              <button onclick="runSuggestTeams()" class="btn btn-gold">
+                <i class="fas fa-magic"></i> Auto xếp đội
+              </button>
+            ` : ''}
+            ${hasTeams ? `
+              <button onclick="saveCurrentTeams()" class="btn btn-primary">
+                <i class="fas fa-save"></i> Lưu đội hình
+              </button>
+              <button onclick="openResultsSection()" class="btn btn-secondary">
+                <i class="fas fa-futbol"></i> Nhập kết quả
+              </button>
+            ` : ''}
+          </div>
         </div>
-        <div class="flex gap-2 flex-wrap justify-end">
-          ${yesPlayers.length > 0 ? `
-            <button onclick="runSuggestTeams()" class="btn btn-gold btn-sm">
-              <i class="fas fa-magic"></i> Auto xếp đội
-            </button>
-          ` : ''}
-          ${hasTeams ? `
-            <button onclick="saveCurrentTeams()" class="btn btn-primary btn-sm">
-              <i class="fas fa-save"></i> Lưu đội hình
-            </button>
-            <button onclick="openResultsSection()" class="btn btn-secondary btn-sm">
-              <i class="fas fa-futbol"></i> Nhập kết quả
-            </button>
-          ` : ''}
+      </div>
+
+      <!-- Step guide banner -->
+      <div class="bg-gray-800 border border-gray-700 rounded-xl p-4">
+        <p class="text-gray-300 text-sm font-semibold mb-2">📋 Hướng dẫn sử dụng trang này:</p>
+        <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
+          <span class="${hasTeams ? 'text-green-400' : ''}">
+            ${hasTeams ? '✅' : '①'} Xem đội hình bên dưới
+          </span>
+          <span>② <strong class="text-amber-300">Kéo thả</strong> card cầu thủ giữa các cột để đổi đội</span>
+          <span>③ Nhấn <strong class="text-green-400">Lưu đội hình</strong> sau khi điều chỉnh xong</span>
+          <span>④ Nhấn <strong class="text-blue-400">Nhập kết quả</strong> để tạo vòng tròn và ghi tỉ số</span>
         </div>
       </div>
 
@@ -87,33 +104,32 @@ function renderFormationUI(container) {
           <span class="text-green-400 font-semibold">✅ ${yesPlayers.length} tham gia</span>
           <span class="text-amber-400">🤔 ${attendance.filter(a => a.vote_status === 'MAYBE').length} có thể</span>
           <span class="text-red-400">❌ ${attendance.filter(a => a.vote_status === 'NO').length} không tham gia</span>
+          <span class="text-gray-500">|</span>
           <span class="text-gray-400">${match?.num_teams || 2} đội · ${match?.num_players_per_team || 5} người/đội</span>
         </div>
       </div>
 
       <!-- Guest team section -->
-      <div id="guest-section">
-        ${renderGuestSection()}
-      </div>
+      <div id="guest-section">${renderGuestSection()}</div>
 
       <!-- Teams area -->
       <div id="teams-container">
         ${hasTeams
           ? renderTeamsGrid(teams)
           : yesPlayers.length > 0
-            ? `<div class="card text-center py-8">
-                <div class="text-4xl mb-3">⚙️</div>
-                <p class="text-white font-medium">Chưa có đội hình</p>
-                <p class="text-gray-400 text-sm mt-1">Nhấn "Auto xếp đội" để hệ thống tự động phân đội</p>
-                <button onclick="runSuggestTeams()" class="btn btn-gold mt-4">
-                  <i class="fas fa-magic mr-2"></i> Auto xếp đội
+            ? `<div class="card text-center py-10">
+                <div class="text-5xl mb-3">⚙️</div>
+                <p class="text-white font-semibold text-lg">Chưa có đội hình</p>
+                <p class="text-gray-400 text-sm mt-1 mb-5">Nhấn nút bên dưới để AI tự động chia đội cân bằng</p>
+                <button onclick="runSuggestTeams()" class="btn btn-gold text-base px-6 py-3">
+                  <i class="fas fa-magic mr-2"></i> Auto xếp đội ngay
                 </button>
               </div>`
             : `<div class="card">${emptyState('👥', 'Chưa có ai vote tham gia', 'Chờ thành viên vote YES để xếp đội')}</div>`
         }
       </div>
 
-      <!-- Results section -->
+      <!-- Results section (hidden by default) -->
       <div id="results-section" class="hidden">
         ${renderResultsSection()}
       </div>
@@ -155,7 +171,10 @@ function renderTeamsGrid(teams) {
           </div>
         ` : ''}
       </div>
-      <p class="text-gray-500 text-xs mb-3"><i class="fas fa-info-circle mr-1"></i>Kéo thả cầu thủ giữa các đội để điều chỉnh</p>
+      <div class="bg-blue-900/30 border border-blue-800 rounded-xl px-4 py-2 mb-3 text-xs text-blue-300 flex items-center gap-2">
+        <i class="fas fa-hand-pointer text-blue-400"></i>
+        <span><strong>Kéo thả</strong> card cầu thủ sang cột khác để đổi đội · Rating trung bình tự cập nhật · Nhấn <strong>Lưu đội hình</strong> khi xong</span>
+      </div>
       <div class="grid grid-cols-1 ${gridCols} gap-4">
         ${teams.map((team, i) => renderTeamColumn(team, i)).join('')}
       </div>
@@ -178,9 +197,11 @@ function renderTeamColumn(team, idx) {
       </div>
       <div class="team-players-list sortable-list" data-team-idx="${idx}" id="team-list-${idx}">
         ${(team.players || []).map(p => renderPlayerCard(p)).join('')}
+        ${(team.players || []).length === 0 ? `<div class="text-center text-gray-600 text-xs py-4">Kéo cầu thủ vào đây</div>` : ''}
       </div>
-      <div class="px-3 pb-3">
-        <div class="text-gray-600 text-xs text-center">${(team.players || []).length} cầu thủ</div>
+      <div class="px-3 pb-3 flex items-center justify-between">
+        <div class="text-gray-500 text-xs">${(team.players || []).length} cầu thủ</div>
+        <div class="text-xs" style="color:${team.team_color}">avg OVR: <strong id="avg-${idx}">${avgRating}</strong></div>
       </div>
     </div>
   `;
@@ -232,15 +253,20 @@ function initSortable() {
 }
 
 function onPlayerMoved(evt) {
-  // Recalculate avg ratings after move
-  document.querySelectorAll('.team-column').forEach((col, idx) => {
-    const list = col.querySelector('.sortable-list');
-    const cards = list ? list.querySelectorAll('.player-card') : [];
+  document.querySelectorAll('.sortable-list').forEach((list, idx) => {
+    const cards = list.querySelectorAll('.player-card');
     let total = 0;
     cards.forEach(card => { total += Number(card.dataset.overall) || 0; });
     const avg = cards.length > 0 ? Math.round(total / cards.length) : 0;
-    const avgEl = col.querySelector('.font-bold[style]');
+
+    const avgEl = document.getElementById(`avg-${idx}`);
     if (avgEl) avgEl.textContent = avg;
+
+    const col = list.closest('.team-column');
+    if (col) {
+      const countEl = col.querySelector('.text-gray-500.text-xs');
+      if (countEl) countEl.textContent = `${cards.length} cầu thủ`;
+    }
   });
 }
 
@@ -574,10 +600,4 @@ async function submitAddGuest(matchId) {
   finally { showLoading(false); }
 }
 
-// ---- Override navigateTo to handle formation ----
-const _originalNavigateTo = window.navigateTo;
-// Handled via PAGES object in app.js
-// Add formation to PAGES
-if (typeof PAGES !== 'undefined') {
-  PAGES['formation'] = { render: renderFormation, title: 'Đội hình', requireAdmin: true };
-}
+// formation đã được đăng ký trong PAGES tại app.js
