@@ -213,6 +213,30 @@ function renderTeamsGrid(teams) {
 
 function renderTeamColumn(team, idx) {
   const avgRating = calcAvgRating(team.players || []);
+  const isGuest = team.team_type === 'guest';
+
+  if (isGuest) {
+    // Đội khách: hiển thị đơn giản, không drag-drop
+    return `
+      <div class="team-column" style="opacity:0.9">
+        <div class="team-header" style="background:${team.team_color}22; border-bottom: 2px dashed ${team.team_color}">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 rounded-full flex-shrink-0" style="background:${team.team_color}"></div>
+              <span style="color:${team.team_color}" class="font-bold">${team.team_name}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded" style="background:${team.team_color}33;color:${team.team_color}">Khách</span>
+            </div>
+          </div>
+        </div>
+        <div class="px-3 py-4 text-center text-gray-500 text-xs">
+          <i class="fas fa-shield-alt text-2xl mb-2 block" style="color:${team.team_color}55"></i>
+          Đội khách tham gia vòng tròn<br/>
+          <span class="text-gray-600">(không xếp cầu thủ)</span>
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="team-column">
       <div class="team-header" style="background:${team.team_color}22; border-bottom: 2px solid ${team.team_color}">
@@ -371,6 +395,8 @@ async function saveCurrentTeams() {
   document.querySelectorAll('.team-column').forEach((col, idx) => {
     const team = formationState.teams[idx];
     if (!team) return;
+    // Bỏ qua guest teams — họ đã được lưu riêng khi addGuestTeam
+    if (team.team_type === 'guest') return;
 
     const players = [];
     col.querySelectorAll('.player-card').forEach(card => {
@@ -743,13 +769,25 @@ async function submitAddGuest(matchId) {
     });
     if (res.success) {
       closeModal();
-      showToast('Đã thêm đội khách!', 'success');
-      // Reload guest teams và cập nhật UI
+      showToast('Đã thêm đội khách! Họ sẽ tham gia vòng tròn.', 'success');
+      // Reload guest teams
       const guestsRes = await API.getGuestTeams(matchId);
       if (guestsRes.success) {
-        formationState.guestTeams = guestsRes.guestTeams || guestsRes.teams || [];
+        formationState.guestTeams = guestsRes.guest_teams || guestsRes.guestTeams || [];
       }
+      // Reload teams (addGuestTeam đã tạo MATCH_TEAMS entry)
+      const teamsRes = await API.getTeams(matchId);
+      if (teamsRes.success && teamsRes.teams.length > 0) {
+        formationState.teams = teamsRes.teams;
+      }
+      // Cập nhật UI
       document.getElementById('guest-section').innerHTML = renderGuestSection();
+      if (formationState.teams.length > 0) {
+        document.getElementById('teams-container').innerHTML = renderTeamsGrid(formationState.teams);
+        initSortable();
+        const rs = document.getElementById('results-section');
+        if (rs) rs.innerHTML = renderResultsSection();
+      }
     } else { showToast(res.error, 'error'); }
   } catch (e) { showToast('Lỗi', 'error'); }
   finally { showLoading(false); }

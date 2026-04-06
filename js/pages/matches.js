@@ -15,8 +15,14 @@ async function renderMatches(container) {
   }
 
   const user = getStoredUser();
-  const upcoming = matches.filter(m => m.status !== 'completed' && m.status !== 'cancelled');
-  const past = matches.filter(m => m.status === 'completed' || m.status === 'cancelled');
+  // Upcoming: gần nhất lên đầu (tăng dần theo ngày)
+  const upcoming = matches
+    .filter(m => m.status !== 'completed' && m.status !== 'cancelled')
+    .sort((a, b) => new Date(a.match_date) - new Date(b.match_date));
+  // Past: mới nhất lên đầu (giảm dần)
+  const past = matches
+    .filter(m => m.status === 'completed' || m.status === 'cancelled')
+    .sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
 
   container.innerHTML = `
     <div class="space-y-6">
