@@ -237,7 +237,7 @@ function adminAdjustRating(data) {
 function getLeaderboard(data) {
   requireAuth(data);
   const users = getSheetData('USERS')
-    .filter(u => u.status === 'active' && !u.is_admin)
+    .filter(u => u.status === 'active')
     .map(u => ({
       user_id: u.user_id,
       full_name: u.full_name,
