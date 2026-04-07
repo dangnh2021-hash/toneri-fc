@@ -2,12 +2,52 @@
 // api.js - API wrapper cho Google Apps Script
 // ============================================================
 
+// ---- Cache Layer ----
+const _apiCache = {};
+
+// TTL (ms) cho từng read action - chỉ cache GET-like calls không có match_id
+const _CACHE_TTL = {
+  getLeaderboard:     60 * 1000,   // 60s — ELO thay đổi ít
+  getMatches:         30 * 1000,   // 30s — danh sách trận
+  getUpcomingMatches: 30 * 1000,   // 30s — trận sắp tới
+  getUsers:          120 * 1000,   // 2 phút — thông tin cầu thủ
+};
+
+// Write actions → invalidate các cached keys liên quan
+const _CACHE_INVALIDATORS = {
+  vote:              ['getUpcomingMatches', 'getMatches'],
+  createMatch:       ['getUpcomingMatches', 'getMatches'],
+  updateMatch:       ['getUpcomingMatches', 'getMatches'],
+  deleteMatch:       ['getUpcomingMatches', 'getMatches'],
+  saveTeams:         ['getMatches', 'getUpcomingMatches'],
+  saveMatchResult:   ['getLeaderboard', 'getMatches', 'getUpcomingMatches'],
+  awardMVP:          ['getLeaderboard'],
+  adminAdjustRating: ['getLeaderboard'],
+  addGuestTeam:      ['getMatches'],
+  deleteGuestTeam:   ['getMatches'],
+  updateProfile:     ['getUsers', 'getLeaderboard'],
+  updateUserStats:   ['getUsers', 'getLeaderboard'],
+  adminUpdateUser:   ['getUsers'],
+  register:          ['getUsers'],
+};
+
 const API = {
   // ---- Core fetch ----
   async call(action, data = {}) {
     const token = localStorage.getItem(CONFIG.TOKEN_KEY);
     const payload = { action, ...data };
     if (token) payload.token = token;
+
+    // --- Cache read: trả về cached nếu còn hiệu lực ---
+    const ttl = _CACHE_TTL[action];
+    if (ttl) {
+      const cacheKey = action + '|' + (token || '') + '|' + JSON.stringify(data);
+      const hit = _apiCache[cacheKey];
+      if (hit && (Date.now() - hit.ts < ttl)) {
+        console.debug(`[Cache HIT] ${action}`);
+        return hit.value;
+      }
+    }
 
     try {
       const res = await fetch(CONFIG.API_URL, {
@@ -18,11 +58,36 @@ const API = {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
+
+      // --- Cache write: lưu response thành công ---
+      if (ttl && json?.success) {
+        const cacheKey = action + '|' + (token || '') + '|' + JSON.stringify(data);
+        _apiCache[cacheKey] = { ts: Date.now(), value: json };
+        console.debug(`[Cache SET] ${action} (TTL: ${ttl / 1000}s)`);
+      }
+
+      // --- Cache invalidation: xóa các cache liên quan sau write ---
+      const toInvalidate = _CACHE_INVALIDATORS[action];
+      if (toInvalidate) {
+        toInvalidate.forEach(prefix => {
+          Object.keys(_apiCache)
+            .filter(k => k.startsWith(prefix + '|'))
+            .forEach(k => { delete _apiCache[k]; });
+        });
+        console.debug(`[Cache INVALIDATE] after ${action}:`, toInvalidate);
+      }
+
       return json;
     } catch (err) {
       console.error(`API Error [${action}]:`, err);
       throw err;
     }
+  },
+
+  // Xóa toàn bộ cache (gọi sau logout)
+  clearCache() {
+    Object.keys(_apiCache).forEach(k => delete _apiCache[k]);
+    console.debug('[Cache CLEAR] all entries removed');
   },
 
   // ---- Password hashing (Web Crypto API) ----

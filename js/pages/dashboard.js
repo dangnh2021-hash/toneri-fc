@@ -310,24 +310,42 @@ async function loadVoteForMatch(matchId, userId) {
 }
 
 async function submitVote(matchId, voteStatus) {
-  showLoading(true);
+  const btns = document.querySelectorAll(`#vote-section-${matchId} .vote-btn`);
+
+  // Lưu lại trạng thái cũ để rollback nếu lỗi
+  const prevActive = document.querySelector(`#vote-section-${matchId} .vote-btn.active`);
+  const prevVote = prevActive?.classList.contains('yes') ? 'YES' : (prevActive ? 'NO' : null);
+
+  // --- Optimistic UI: cập nhật ngay lập tức, không chờ API ---
+  btns.forEach(btn => {
+    const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
+    btn.classList.toggle('active', btnVote === voteStatus);
+    btn.disabled = true; // Tránh double-click trong lúc gọi API
+  });
+
   try {
     const res = await API.vote(matchId, voteStatus);
     if (res.success) {
-      showToast(res.message, 'success');
-      // Update button states
-      document.querySelectorAll(`#vote-section-${matchId} .vote-btn`).forEach(btn => {
-        const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
-        btn.classList.toggle('active', btnVote === voteStatus);
-      });
-      // Refresh summary
+      showToast(res.message || 'Đã vote!', 'success');
+      // Refresh summary số người vote (non-blocking, không ảnh hưởng button)
       loadVoteForMatch(matchId, getStoredUser().user_id);
     } else {
-      showToast(res.error, 'error');
+      // Rollback về trạng thái cũ
+      _rollbackVoteBtns(btns, prevVote);
+      showToast(res.error || 'Vote thất bại', 'error');
     }
   } catch (e) {
+    // Rollback về trạng thái cũ
+    _rollbackVoteBtns(btns, prevVote);
     showToast('Lỗi kết nối', 'error');
   } finally {
-    showLoading(false);
+    btns.forEach(btn => { btn.disabled = false; });
   }
+}
+
+function _rollbackVoteBtns(btns, prevVote) {
+  btns.forEach(btn => {
+    const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
+    btn.classList.toggle('active', prevVote !== null && btnVote === prevVote);
+  });
 }

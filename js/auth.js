@@ -181,6 +181,7 @@ async function handleLogout() {
   showLoading(true);
   try { await API.logout(); } catch (e) {}
   clearSession();
+  API.clearCache(); // Xóa cache khi logout để tránh data leak giữa các session
   showLoading(false);
   showAuth();
   showToast('Đã đăng xuất', 'info');

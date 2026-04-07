@@ -236,18 +236,38 @@ async function openMatchDetail(matchId) {
 }
 
 async function submitVoteFromModal(matchId, voteStatus) {
-  showLoading(true);
+  const modalVoteBtns = document.querySelectorAll('.vote-btn');
+
+  // Lưu trạng thái cũ để rollback
+  const prevActive = document.querySelector('.vote-btn.active');
+  const prevVote = prevActive?.classList.contains('yes') ? 'YES' : (prevActive ? 'NO' : null);
+
+  // --- Optimistic UI: cập nhật badge "Trạng thái của bạn" và button ngay ---
+  modalVoteBtns.forEach(btn => {
+    const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
+    btn.classList.toggle('active', btnVote === voteStatus);
+    btn.disabled = true;
+  });
+
   try {
     const res = await API.vote(matchId, voteStatus);
     if (res.success) {
-      showToast(res.message, 'success');
-      // Reload modal để cập nhật danh sách người tham gia
+      showToast(res.message || 'Đã vote!', 'success');
+      // Reload toàn bộ modal để cập nhật danh sách người tham gia (attendance list thay đổi)
       await openMatchDetail(matchId);
     } else {
-      showToast(res.error, 'error');
+      // Rollback button states
+      modalVoteBtns.forEach(btn => {
+        const btnVote = btn.classList.contains('yes') ? 'YES' : 'NO';
+        btn.classList.toggle('active', prevVote !== null && btnVote === prevVote);
+        btn.disabled = false;
+      });
+      showToast(res.error || 'Vote thất bại', 'error');
     }
-  } catch (e) { showToast('Lỗi', 'error'); }
-  finally { showLoading(false); }
+  } catch (e) {
+    modalVoteBtns.forEach(btn => { btn.disabled = false; });
+    showToast('Lỗi kết nối', 'error');
+  }
 }
 
 async function openVoteModal(matchId) {

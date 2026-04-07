@@ -84,3 +84,22 @@ function respond(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+// ============================================================
+// Keep-Warm: Ngăn GAS "ngủ" để tránh cold start 2-5 giây
+//
+// SETUP (làm 1 lần sau khi deploy):
+//   1. Vào Apps Script Editor → biểu tượng đồng hồ (Triggers) ở sidebar trái
+//   2. Nhấn "+ Add Trigger" (góc dưới phải)
+//   3. Cấu hình:
+//      - Function: keepWarm
+//      - Event source: Time-driven
+//      - Type: Minutes timer
+//      - Interval: Every 4 minutes
+//   4. Save → Authorize nếu được yêu cầu
+//
+// Kết quả: GAS luôn "warm", cold start từ 2-5s → <500ms
+// ============================================================
+function keepWarm() {
+  Logger.log('[Keep-Warm] ping at ' + new Date().toISOString());
+}
