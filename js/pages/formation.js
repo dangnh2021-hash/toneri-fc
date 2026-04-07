@@ -279,6 +279,14 @@ function renderTeamColumn(team, idx) {
         <div class="text-gray-500 text-xs">${(team.players || []).length} cầu thủ</div>
         <div class="text-xs" style="color:${team.team_color}">avg OVR: <strong id="avg-${idx}">${avgRating}</strong></div>
       </div>
+      ${formationState.isAdmin ? `
+        <div class="px-3 pb-3 pt-0">
+          <button onclick="showAddPlayerModal(${idx})"
+            class="w-full text-xs text-gray-600 hover:text-gray-300 border border-dashed border-gray-700 hover:border-gray-500 rounded-lg py-2 transition-colors">
+            <i class="fas fa-plus mr-1"></i> Thêm cầu thủ
+          </button>
+        </div>
+      ` : ''}
     </div>
   `;
 }
@@ -331,8 +339,14 @@ function renderPlayerCard(player) {
           <div class="text-white text-sm font-semibold truncate">${player.full_name || player.guest_player_name || 'Unknown'}</div>
           <div class="text-gray-400 text-xs">${positionBadge(player.positions || player.assigned_position || '')}</div>
         </div>
-        <div class="text-gray-600 text-xs hidden sm:block">
-          <i class="fas fa-grip-vertical"></i>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          ${formationState.isAdmin ? `
+            <button onclick="removePlayerFromTeam(this)"
+              class="text-gray-600 hover:text-red-400 transition-colors text-base leading-none px-1 py-0.5 rounded"
+              title="Xóa khỏi đội">×</button>
+          ` : `
+            <div class="text-gray-600 text-xs hidden sm:block"><i class="fas fa-grip-vertical"></i></div>
+          `}
         </div>
       </div>
     </div>
@@ -374,6 +388,89 @@ function onPlayerMoved() {
       if (countEl) countEl.textContent = `${cards.length} cầu thủ`;
     }
   });
+}
+
+// ---- Thêm / Xóa cầu thủ thủ công ----
+
+let _addPlayerTargetIdx = null;
+
+function removePlayerFromTeam(btn) {
+  const card = btn.closest('.player-card');
+  if (!card) return;
+  card.remove();
+  onPlayerMoved();
+}
+
+function showAddPlayerModal(teamIdx) {
+  _addPlayerTargetIdx = teamIdx;
+  const existing = document.getElementById('add-player-modal');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="add-player-modal"
+      class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+        onclick="event.stopPropagation()">
+        <h3 class="text-white font-bold text-lg mb-4">➕ Thêm cầu thủ vào đội</h3>
+        <div class="space-y-3">
+          <div>
+            <label class="text-gray-400 text-xs mb-1 block">Tên cầu thủ</label>
+            <input id="adhoc-name" type="text" placeholder="Nhập tên..."
+              class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              onkeydown="if(event.key==='Enter')confirmAddAdhocPlayer()" />
+          </div>
+          <div>
+            <label class="text-gray-400 text-xs mb-1 block">Vị trí</label>
+            <select id="adhoc-pos"
+              class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              <option value="GK">GK – Thủ môn</option>
+              <option value="DF">DF – Hậu vệ</option>
+              <option value="MF" selected>MF – Tiền vệ</option>
+              <option value="FW">FW – Tiền đạo</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-gray-400 text-xs mb-1 block">Chỉ số (1–99)</label>
+            <input id="adhoc-rating" type="number" value="60" min="1" max="99"
+              class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+        <div class="flex gap-2 mt-5">
+          <button onclick="confirmAddAdhocPlayer()" class="flex-1 btn btn-primary">Thêm vào đội</button>
+          <button onclick="document.getElementById('add-player-modal').remove()" class="flex-1 btn btn-secondary">Hủy</button>
+        </div>
+      </div>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('adhoc-name')?.focus(), 50);
+}
+
+function confirmAddAdhocPlayer() {
+  const name = document.getElementById('adhoc-name')?.value.trim();
+  if (!name) { document.getElementById('adhoc-name')?.focus(); return; }
+
+  const pos = document.getElementById('adhoc-pos')?.value || 'MF';
+  const rating = Math.min(99, Math.max(1, Number(document.getElementById('adhoc-rating')?.value) || 60));
+
+  const list = document.getElementById(`team-list-${_addPlayerTargetIdx}`);
+  if (!list) return;
+
+  // Xóa placeholder "Kéo cầu thủ vào đây" nếu còn
+  const placeholder = list.querySelector('.text-center.text-gray-600');
+  if (placeholder) placeholder.remove();
+
+  const fakePlayer = {
+    user_id: '',
+    full_name: name,
+    guest_player_name: name,
+    assigned_position: pos,
+    positions: pos,
+    overall_rating: rating
+  };
+  list.insertAdjacentHTML('beforeend', renderPlayerCard(fakePlayer));
+
+  document.getElementById('add-player-modal')?.remove();
+  onPlayerMoved();
 }
 
 // ---- Auto suggest teams ----

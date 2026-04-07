@@ -192,7 +192,7 @@ function saveTeams(data) {
         teamId,
         match_id,
         player.user_id || '',
-        player.guest_player_name || '',
+        player.guest_player_name || (!player.user_id ? player.full_name || '' : ''),
         player.assigned_position || player.position_played || 'MF',
         idx + 1,        // jersey_number
         idx === 0,      // is_captain (đầu tiên = đội trưởng)
@@ -255,7 +255,7 @@ function getTeams(data) {
         return {
           ...p,
           full_name: u.full_name || p.guest_player_name || 'Unknown',
-          overall_rating: u.overall_rating || 0,
+          overall_rating: u.overall_rating || (p.user_id ? 0 : 60),
           positions: u.positions || '',
           avatar_url: u.avatar_url || ''
         };
